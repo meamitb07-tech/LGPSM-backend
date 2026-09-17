@@ -6,6 +6,8 @@ import { errorHandler } from './middlewares/errorHandler';
 
 import authRoutes from './routes/auth.routes';
 import userRoutes from './routes/user.routes';
+import eventRoutes from './routes/event.routes';
+import mediaRoutes from './routes/media.routes';
 
 const app = express();
 
@@ -26,6 +28,8 @@ app.get('/api/health', (req, res) => {
 // API Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
+app.use('/api/v1/events', eventRoutes);
+app.use('/api/v1/media', mediaRoutes);
 
 // Global error handler should be the last middleware
 app.use(errorHandler);
