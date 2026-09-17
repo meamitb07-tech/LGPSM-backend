@@ -20,5 +20,15 @@ export const userController = {
     } catch (error) {
       next(error);
     }
+  },
+
+  async createUser(req: Request, res: Response, next: NextFunction) {
+    try {
+      if (!req.user) throw { statusCode: 401, message: 'Unauthorized' };
+      const user = await userService.createUser(req.user.role, req.body);
+      res.status(201).json({ success: true, data: user });
+    } catch (error) {
+      next(error);
+    }
   }
 };

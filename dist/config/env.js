@@ -18,6 +18,11 @@ const envSchema = zod_1.z.object({
     JWT_EXPIRES_IN: zod_1.z.string().default('15m'),
     JWT_REFRESH_EXPIRES_IN: zod_1.z.string().default('7d'),
     GOOGLE_CLIENT_ID: zod_1.z.string().optional(),
+    AWS_REGION: zod_1.z.string().default('us-east-1'),
+    AWS_S3_BUCKET: zod_1.z.string().optional(),
+    AWS_ACCESS_KEY_ID: zod_1.z.string().optional(),
+    AWS_SECRET_ACCESS_KEY: zod_1.z.string().optional(),
+    AWS_CLOUDFRONT_DOMAIN: zod_1.z.string().optional(),
 });
 const _env = envSchema.safeParse(process.env);
 if (!_env.success) {

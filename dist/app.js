@@ -10,6 +10,8 @@ const env_1 = require("./config/env");
 const errorHandler_1 = require("./middlewares/errorHandler");
 const auth_routes_1 = __importDefault(require("./routes/auth.routes"));
 const user_routes_1 = __importDefault(require("./routes/user.routes"));
+const event_routes_1 = __importDefault(require("./routes/event.routes"));
+const media_routes_1 = __importDefault(require("./routes/media.routes"));
 const app = (0, express_1.default)();
 // Security and Middleware
 app.use((0, helmet_1.default)());
@@ -26,6 +28,8 @@ app.get('/api/health', (req, res) => {
 // API Routes
 app.use('/api/auth', auth_routes_1.default);
 app.use('/api/users', user_routes_1.default);
+app.use('/api/v1/events', event_routes_1.default);
+app.use('/api/v1/media', media_routes_1.default);
 // Global error handler should be the last middleware
 app.use(errorHandler_1.errorHandler);
 exports.default = app;

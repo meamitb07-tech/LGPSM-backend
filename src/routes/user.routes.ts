@@ -1,8 +1,10 @@
 import { Router } from 'express';
 import { userController } from '../controllers/user.controller';
 import { authenticate } from '../middlewares/authenticate';
-import { updateProfileSchema } from '../validators/user.validator';
+import { updateProfileSchema, createUserSchema } from '../validators/user.validator';
 import { Request, Response, NextFunction } from 'express';
+import { authorizeRoles } from '../middlewares/authorizeRoles';
+import { Role } from '../models/User';
 
 const router = Router();
 
@@ -20,5 +22,13 @@ router.use(authenticate);
 
 router.get('/profile', userController.getProfile);
 router.patch('/profile', validate(updateProfileSchema), userController.updateProfile);
+
+// Endpoint for Admins and Organizers to create sub-users
+router.post(
+  '/', 
+  authorizeRoles(Role.ADMIN, Role.ORGANIZER), 
+  validate(createUserSchema), 
+  userController.createUser
+);
 
 export default router;
