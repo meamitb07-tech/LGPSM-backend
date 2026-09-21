@@ -6,7 +6,7 @@ dotenv.config();
 const envSchema = z.object({
   PORT: z.string().default('5000'),
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
-  atlas_URL: z.string().min(1, 'atlas_URL is required'),
+  ATLAS_URL: z.string().min(1, 'ATLAS_URL is required'),
   DNS_SERVER: z.string().optional().default('8.8.8.8'),
   FRONTEND_URL: z.string().default('http://localhost:3000'),
   JWT_SECRET: z.string().min(1, 'JWT_SECRET is required'),

@@ -3,7 +3,7 @@ import mongoose from 'mongoose';
 import { env } from './env';
 
 async function connectDatabase() {
-  const atlasUrl = env.atlas_URL;
+  const atlasUrl = env.ATLAS_URL;
 
   try {
     // Attempting to bypass local DNS SRV blocking

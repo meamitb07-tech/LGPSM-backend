@@ -10,7 +10,7 @@ dotenv_1.default.config();
 const envSchema = zod_1.z.object({
     PORT: zod_1.z.string().default('5000'),
     NODE_ENV: zod_1.z.enum(['development', 'production', 'test']).default('development'),
-    atlas_URL: zod_1.z.string().min(1, 'atlas_URL is required'),
+    ATLAS_URL: zod_1.z.string().min(1, 'ATLAS_URL is required'),
     DNS_SERVER: zod_1.z.string().optional().default('8.8.8.8'),
     FRONTEND_URL: zod_1.z.string().default('http://localhost:3000'),
     JWT_SECRET: zod_1.z.string().min(1, 'JWT_SECRET is required'),
