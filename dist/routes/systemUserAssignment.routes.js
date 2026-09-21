@@ -13,7 +13,12 @@ const validate = (schema) => (req, res, next) => {
         next();
     }
     catch (err) {
-        res.status(400).json({ error: 'Validation Error', message: 'Invalid input data', details: err.errors });
+        res.status(400).json({
+            error: 'Validation Error',
+            message: 'Invalid input data',
+            details: err.issues,
+            receivedBody: req.body
+        });
     }
 };
 exports.eventAssignmentRoutes = (0, express_1.Router)({ mergeParams: true });

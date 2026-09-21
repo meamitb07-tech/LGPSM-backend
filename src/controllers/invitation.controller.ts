@@ -6,7 +6,7 @@ export const invitationController = {
     try {
       const eventId = req.params.eventId as string;
       const { inviteeIds, channel } = req.body;
-      const organizerId = (req as any).user.id;
+      const organizerId = (req as any).user.userId;
 
       const results = await invitationService.sendInvitations(eventId, organizerId, inviteeIds, channel);
       return res.status(200).json({ message: 'Invitations processed', results });
@@ -21,7 +21,7 @@ export const invitationController = {
     try {
       const eventId = req.params.eventId as string;
       const { invitationIds } = req.body;
-      const organizerId = (req as any).user.id;
+      const organizerId = (req as any).user.userId;
 
       const results = await invitationService.resendInvitations(eventId, organizerId, invitationIds);
       return res.status(200).json({ message: 'Invitations resend processed', results });
@@ -35,7 +35,7 @@ export const invitationController = {
   async getInvitations(req: Request, res: Response) {
     try {
       const eventId = req.params.eventId as string;
-      const organizerId = (req as any).user.id;
+      const organizerId = (req as any).user.userId;
       const page = parseInt(req.query.page as string) || 1;
       const limit = parseInt(req.query.limit as string) || 20;
 

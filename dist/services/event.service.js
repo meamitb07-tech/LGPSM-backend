@@ -10,23 +10,44 @@ const Template_1 = require("../models/Template");
 const mongoose_1 = __importDefault(require("mongoose"));
 class EventService {
     async createEvent(organizerId, eventData) {
-        // Validate Category
-        const categoryExists = await Category_1.Category.findById(eventData.categoryId);
+        // Resolve Category
+        let categoryId = eventData.categoryId;
+        let categoryExists = categoryId && mongoose_1.default.Types.ObjectId.isValid(categoryId)
+            ? await Category_1.Category.findById(categoryId)
+            : null;
         if (!categoryExists) {
-            throw new Error('CATEGORY_NOT_FOUND');
+            let defaultCat = await Category_1.Category.findOne({ name: 'General' });
+            if (!defaultCat) {
+                defaultCat = await Category_1.Category.create({ name: 'General', isActive: true });
+            }
+            categoryId = defaultCat._id;
         }
         // Validate Template if provided
-        if (eventData.templateId) {
+        if (eventData.templateId && mongoose_1.default.Types.ObjectId.isValid(eventData.templateId)) {
             const templateExists = await Template_1.Template.findById(eventData.templateId);
             if (!templateExists) {
-                throw new Error('TEMPLATE_NOT_FOUND');
+                delete eventData.templateId;
             }
         }
-        // Force organizerId and default status to DRAFT
+        else {
+            delete eventData.templateId;
+        }
+        const now = new Date();
+        const tomorrow = new Date(now.getTime() + 86400000);
+        const startVal = eventData.schedule?.start || eventData.startDate || now;
+        const endVal = eventData.schedule?.end || eventData.endDate || tomorrow;
+        // Force organizerId and default status to PUBLISHED so it shows on event listing
         const dataToCreate = {
             ...eventData,
+            categoryId,
+            description: eventData.description || eventData.title || 'Event Description',
+            format: eventData.format || 'PHYSICAL',
+            schedule: {
+                start: new Date(startVal),
+                end: new Date(endVal)
+            },
             organizerId: new mongoose_1.default.Types.ObjectId(organizerId),
-            status: 'DRAFT'
+            status: 'PUBLISHED'
         };
         return await event_repository_1.eventRepository.create(dataToCreate);
     }
