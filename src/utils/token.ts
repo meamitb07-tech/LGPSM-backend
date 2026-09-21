@@ -14,7 +14,7 @@ export function generateAccessToken(userId: string, role: Role): string {
 }
 
 export function generateRefreshToken(userId: string, role: Role): string {
-  const payload: TokenPayload = { userId, role, type: 'refresh' };
+  const payload: TokenPayload & { nonce: string } = { userId, role, type: 'refresh', nonce: Math.random().toString(36).substring(2) };
   return jwt.sign(payload, env.JWT_REFRESH_SECRET, { expiresIn: env.JWT_REFRESH_EXPIRES_IN as any });
 }
 

@@ -196,6 +196,41 @@ exports.inviteeService = {
         const workbook = xlsx.read(fileBuffer, { type: 'buffer' });
         const sheetName = workbook.SheetNames[0];
         const sheet = workbook.Sheets[sheetName];
+        // Get headers
+        const headers = xlsx.utils.sheet_to_json(sheet, { header: 1 })[0] || [];
+        const lowerHeaders = headers.map((h) => String(h).trim().toLowerCase());
+        // Validate CSV headers against configured session fields
+        const requiredStandardHeaders = ['name', 'email', 'mobile', 'dietary preference'];
+        const missingSessions = [];
+        const mismatchedHeaders = [];
+        // Check if all configured event sessions exist in the CSV headers
+        for (const session of eventSessions) {
+            if (!lowerHeaders.includes(session.name.toLowerCase())) {
+                missingSessions.push(session.name);
+            }
+        }
+        // Check if there are any extra headers that don't belong to standard or sessions
+        for (const header of lowerHeaders) {
+            if (!requiredStandardHeaders.includes(header) && !sessionNameMap.has(header)) {
+                mismatchedHeaders.push(header);
+            }
+        }
+        if (missingSessions.length > 0 || mismatchedHeaders.length > 0) {
+            const errors = [];
+            if (missingSessions.length > 0) {
+                errors.push(`Missing required session columns: ${missingSessions.join(', ')}`);
+            }
+            if (mismatchedHeaders.length > 0) {
+                errors.push(`Mismatched/Unknown columns found: ${mismatchedHeaders.join(', ')}`);
+            }
+            return {
+                totalRows: 0,
+                imported: 0,
+                rejected: 0,
+                duplicateCount: 0,
+                errors: [{ row: 0, error: 'Header Validation Failed: ' + errors.join('. ') }]
+            };
+        }
         const rows = xlsx.utils.sheet_to_json(sheet, { defval: '' });
         const results = {
             totalRows: rows.length,
@@ -252,14 +287,8 @@ exports.inviteeService = {
                 // Any other column is assumed to be a session name
                 const lowerKey = key.toLowerCase();
                 const sessionId = sessionNameMap.get(lowerKey);
-                if (!sessionId) {
-                    // Unrecognized column - could be a typo or just extra data
-                    // Prompt says: "Validate CSV headers against the configured session fields before importing, and reject the file with clear, field-specific errors if any required fields are missing or mismatched"
-                    // Or report invalid/unknown session columns. We will report an error.
-                    sessionError = true;
-                    results.errors.push({ row: rowNum, error: `Unknown session column: ${key}` });
-                    break;
-                }
+                if (!sessionId)
+                    continue; // Already validated headers
                 const val = String(value).trim().toUpperCase();
                 if (val !== 'Y' && val !== 'N' && val !== '') {
                     sessionError = true;

@@ -11,7 +11,7 @@ export const eventController = {
       res.status(201).json({
         success: true,
         data: {
-          eventId: event._id.toString(),
+          eventId: (event as any)._id.toString(),
           status: event.status.toLowerCase(),
           createdAt: event.createdAt
         }
@@ -88,7 +88,7 @@ export const eventController = {
       
       const event = await eventService.deactivateEvent(eventId, organizerId);
       
-      res.status(200).json({ success: true, data: { eventId: event._id, status: event.status } });
+      res.status(200).json({ success: true, data: { eventId: (event as any)._id, status: event.status } });
     } catch (error) {
        if ((error as Error).message === 'EVENT_NOT_FOUND') {
         res.status(404).json({ error: 'Not Found', message: 'Event not found or inaccessible', details: [] });

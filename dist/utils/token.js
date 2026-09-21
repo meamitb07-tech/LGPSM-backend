@@ -14,7 +14,7 @@ function generateAccessToken(userId, role) {
     return jsonwebtoken_1.default.sign(payload, env_1.env.JWT_SECRET, { expiresIn: env_1.env.JWT_EXPIRES_IN });
 }
 function generateRefreshToken(userId, role) {
-    const payload = { userId, role, type: 'refresh' };
+    const payload = { userId, role, type: 'refresh', nonce: Math.random().toString(36).substring(2) };
     return jsonwebtoken_1.default.sign(payload, env_1.env.JWT_REFRESH_SECRET, { expiresIn: env_1.env.JWT_REFRESH_EXPIRES_IN });
 }
 function verifyAccessToken(token) {

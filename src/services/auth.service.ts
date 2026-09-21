@@ -43,7 +43,7 @@ export const authService = {
       throw { statusCode: 401, message: 'Invalid credentials or inactive account' };
     }
 
-    const userId = user._id.toString();
+    const userId = (user as any)._id.toString();
     const accessToken = generateAccessToken(userId, user.role);
     const refreshToken = generateRefreshToken(userId, user.role);
 
@@ -85,7 +85,7 @@ export const authService = {
       throw { statusCode: 403, message: 'User account is inactive' };
     }
 
-    const userId = user._id.toString();
+    const userId = (user as any)._id.toString();
     const accessToken = generateAccessToken(userId, user.role);
     const refreshToken = generateRefreshToken(userId, user.role);
 
@@ -110,7 +110,7 @@ export const authService = {
 
     await tokenRepository.revokeToken(token);
 
-    const userId = user._id.toString();
+    const userId = (user as any)._id.toString();
     const newAccessToken = generateAccessToken(userId, user.role);
     const newRefreshToken = generateRefreshToken(userId, user.role);
 
@@ -130,7 +130,7 @@ export const authService = {
     const user = await userRepository.findByEmail(email);
     if (!user) return;
 
-    const resetToken = generateAccessToken(user._id.toString(), user.role); 
+    const resetToken = generateAccessToken((user as any)._id.toString(), user.role); 
     console.log(`[DEV ONLY] Password reset requested for ${email}. Token: ${resetToken}`);
   },
 
@@ -143,8 +143,8 @@ export const authService = {
     }
 
     const hashedPassword = await hashPassword(newPassword);
-    await userRepository.updateById(user._id.toString(), { passwordHash: hashedPassword });
+    await userRepository.updateById((user as any)._id.toString(), { passwordHash: hashedPassword });
     
-    await tokenRepository.revokeAllForUser(user._id.toString());
+    await tokenRepository.revokeAllForUser((user as any)._id.toString());
   }
 };

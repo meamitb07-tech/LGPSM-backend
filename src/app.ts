@@ -10,6 +10,8 @@ import eventRoutes from './routes/event.routes';
 import mediaRoutes from './routes/media.routes';
 import { eventSessionRoutes, sessionRoutes } from './routes/session.routes';
 import { eventInviteeRoutes, inviteeRoutes } from './routes/invitee.routes';
+import invitationRoutes from './routes/invitation.routes';
+import publicInvitationRoutes from './routes/publicInvitation.routes';
 import { eventAssignmentRoutes, assignmentRoutes, myAssignmentRoutes } from './routes/systemUserAssignment.routes';
 
 const app = express();
@@ -38,6 +40,8 @@ app.use('/api/v1/sessions', sessionRoutes);
 app.use('/api/v1/events/:eventId/invitees', eventInviteeRoutes);
 app.use('/api/v1/invitees', inviteeRoutes);
 app.use('/api/v1/events/:eventId/assignments', eventAssignmentRoutes);
+app.use('/api/v1/events/:eventId/invitations', invitationRoutes);
+app.use('/api/v1/public/invitations', publicInvitationRoutes);
 app.use('/api/v1/assignments', assignmentRoutes);
 app.use('/api/v1/users/me/assignments', myAssignmentRoutes);
 

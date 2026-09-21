@@ -92,7 +92,7 @@ export const inviteeService = {
       const mobileToCheck = data.mobile || invitee.mobile;
       const duplicates = await inviteeRepository.findByEmailOrMobile(invitee.eventId.toString(), emailToCheck, mobileToCheck);
       
-      const isDuplicate = duplicates.some(dup => dup._id.toString() !== inviteeId);
+      const isDuplicate = duplicates.some(dup => (dup as any)._id.toString() !== inviteeId);
       if (isDuplicate) {
         throw new Error('DUPLICATE_INVITEE');
       }
