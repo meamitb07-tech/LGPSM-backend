@@ -11,7 +11,12 @@ const validate = (schema: ZodSchema) => (req: Request, res: Response, next: Next
     schema.parse({ body: req.body });
     next();
   } catch (err: any) {
-    res.status(400).json({ error: 'Validation Error', message: 'Invalid input data', details: err.errors });
+    res.status(400).json({
+  	  error: 'Validation Error',
+  	  message: 'Invalid input data',
+  	  details: err.issues,
+  	  receivedBody: req.body
+    });
   }
 };
 

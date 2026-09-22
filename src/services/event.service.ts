@@ -6,25 +6,48 @@ import mongoose from 'mongoose';
 
 export class EventService {
   async createEvent(organizerId: string, eventData: any): Promise<IEvent> {
-    // Validate Category
-    const categoryExists = await Category.findById(eventData.categoryId);
+    // Resolve Category
+    let categoryId = eventData.categoryId;
+    let categoryExists = categoryId && mongoose.Types.ObjectId.isValid(categoryId) 
+      ? await Category.findById(categoryId) 
+      : null;
+
     if (!categoryExists) {
-      throw new Error('CATEGORY_NOT_FOUND');
+      let defaultCat = await Category.findOne({ name: 'General' });
+      if (!defaultCat) {
+        defaultCat = await Category.create({ name: 'General', isActive: true });
+      }
+      categoryId = defaultCat._id;
     }
 
     // Validate Template if provided
-    if (eventData.templateId) {
+    if (eventData.templateId && mongoose.Types.ObjectId.isValid(eventData.templateId)) {
       const templateExists = await Template.findById(eventData.templateId);
       if (!templateExists) {
-        throw new Error('TEMPLATE_NOT_FOUND');
+        delete eventData.templateId;
       }
+    } else {
+      delete eventData.templateId;
     }
 
-    // Force organizerId and default status to DRAFT
+    const now = new Date();
+    const tomorrow = new Date(now.getTime() + 86400000);
+
+    const startVal = eventData.schedule?.start || eventData.startDate || now;
+    const endVal = eventData.schedule?.end || eventData.endDate || tomorrow;
+
+    // Force organizerId and default status to PUBLISHED so it shows on event listing
     const dataToCreate = {
       ...eventData,
+      categoryId,
+      description: eventData.description || eventData.title || 'Event Description',
+      format: eventData.format || 'PHYSICAL',
+      schedule: {
+        start: new Date(startVal),
+        end: new Date(endVal)
+      },
       organizerId: new mongoose.Types.ObjectId(organizerId),
-      status: 'DRAFT'
+      status: 'PUBLISHED'
     };
 
     return await eventRepository.create(dataToCreate);
