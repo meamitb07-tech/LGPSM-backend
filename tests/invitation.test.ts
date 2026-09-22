@@ -102,7 +102,7 @@ describe('Invitation Service', () => {
 
     // 2. Failed resend
     (sendEmail as jest.Mock).mockRejectedValueOnce(new Error('SMTP_ERROR'));
-    await invitationService.resendInvitations(eventId.toString(), organizerId.toString(), [oldInvitation!._id.toString()]);
+    await invitationService.resendInvitations(eventId.toString(), organizerId.toString(), [(oldInvitation!._id as any).toString()]);
 
     const inviteeAfterFail = await Invitee.findById(inviteeId);
     expect(inviteeAfterFail?.qrTokenHash).toBe(oldTokenHash); // Token unchanged!

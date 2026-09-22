@@ -1,0 +1,44 @@
+import { Router, Request, Response, NextFunction } from 'express';
+import { checkInController } from '../controllers/checkIn.controller';
+import { authenticate } from '../middlewares/authenticate';
+import { authorizeRoles } from '../middlewares/authorizeRoles';
+import { Role } from '../models/User';
+import { scanCheckInSchema, manualCheckInSchema } from '../validators/checkIn.validator';
+import { ZodSchema } from 'zod';
+
+const validate = (schema: ZodSchema) => (req: Request, res: Response, next: NextFunction) => {
+  try {
+    schema.parse({ body: req.body });
+    next();
+  } catch (err: any) {
+    res.status(400).json({ error: 'Validation Error', message: 'Invalid input data', details: err.errors });
+  }
+};
+
+export const checkInRoutes = Router();
+checkInRoutes.use(authenticate);
+
+checkInRoutes.post(
+  '/scan',
+  authorizeRoles(Role.ORGANIZER, Role.SYSTEM_USER, Role.ADMIN),
+  validate(scanCheckInSchema),
+  checkInController.scanCheckIn
+);
+
+checkInRoutes.post(
+  '/manual',
+  authorizeRoles(Role.ORGANIZER, Role.SYSTEM_USER, Role.ADMIN),
+  validate(manualCheckInSchema),
+  checkInController.manualCheckIn
+);
+
+export const eventCheckInRoutes = Router({ mergeParams: true });
+eventCheckInRoutes.use(authenticate);
+
+eventCheckInRoutes.get(
+  '/',
+  authorizeRoles(Role.ORGANIZER, Role.SYSTEM_USER, Role.ADMIN),
+  checkInController.getCheckIns
+);
+
+export default checkInRoutes;

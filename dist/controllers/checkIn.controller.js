@@ -1,0 +1,148 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.checkInController = void 0;
+const checkIn_service_1 = require("../services/checkIn.service");
+exports.checkInController = {
+    async scanCheckIn(req, res, next) {
+        try {
+            const actor = {
+                userId: req.user.userId,
+                role: req.user.role
+            };
+            const result = await checkIn_service_1.checkInService.scanCheckIn(actor, req.body);
+            res.status(201).json({ success: true, message: 'Check-in successful', data: result });
+        }
+        catch (error) {
+            if (error.message === 'INVALID_QR_TOKEN') {
+                res.status(404).json({ success: false, error: 'Not Found', message: 'Invalid or unknown QR token' });
+            }
+            else if (error.message === 'EVENT_NOT_FOUND') {
+                res.status(404).json({ success: false, error: 'Not Found', message: 'Event not found' });
+            }
+            else if (error.message === 'SESSION_NOT_FOUND') {
+                res.status(404).json({ success: false, error: 'Not Found', message: 'Session not found for this event' });
+            }
+            else if (error.message === 'EVENT_MISMATCH') {
+                res.status(400).json({ success: false, error: 'Bad Request', message: 'QR token does not belong to the specified event' });
+            }
+            else if (error.message === 'RSVP_DECLINED') {
+                res.status(400).json({ success: false, error: 'Bad Request', message: 'Check-in denied: Invitee RSVP is DECLINED' });
+            }
+            else if (error.message === 'RSVP_PENDING') {
+                res.status(400).json({ success: false, error: 'Bad Request', message: 'Check-in denied: Invitee RSVP is PENDING and unconfirmed entry is disabled' });
+            }
+            else if (error.message === 'FORBIDDEN' || error.message === 'STAFF_EVENT_FORBIDDEN') {
+                res.status(403).json({ success: false, error: 'Forbidden', message: 'You are not authorized for this event' });
+            }
+            else if (error.message === 'STAFF_SESSION_FORBIDDEN') {
+                res.status(403).json({ success: false, error: 'Forbidden', message: 'Staff is not assigned to check in guests for this session' });
+            }
+            else if (error.message === 'INVITEE_SESSION_DENIED') {
+                res.status(403).json({ success: false, error: 'Forbidden', message: 'Invitee does not have permission for this session' });
+            }
+            else if (error.message === 'ONLY_ONCE_VIOLATION') {
+                res.status(409).json({ success: false, error: 'Conflict', message: 'Invitee has already checked into this session (ONLY_ONCE rule)' });
+            }
+            else if (error.message === 'DUPLICATE_CHECKIN' || error.code === 11000) {
+                res.status(409).json({ success: false, error: 'Conflict', message: 'Invitee has already checked in' });
+            }
+            else if (error.message === 'CROSS_SESSION_CONFLICT') {
+                res.status(409).json({ success: false, error: 'Conflict', message: 'Cross-session conflict: Invitee has already checked into another session for this event' });
+            }
+            else {
+                next(error);
+            }
+        }
+    },
+    async manualCheckIn(req, res, next) {
+        try {
+            const actor = {
+                userId: req.user.userId,
+                role: req.user.role
+            };
+            const result = await checkIn_service_1.checkInService.manualCheckIn(actor, req.body);
+            res.status(201).json({ success: true, message: 'Check-in successful', data: result });
+        }
+        catch (error) {
+            if (error.message === 'INVITEE_NOT_FOUND') {
+                res.status(404).json({ success: false, error: 'Not Found', message: 'Invitee not found in this event' });
+            }
+            else if (error.message === 'EVENT_NOT_FOUND') {
+                res.status(404).json({ success: false, error: 'Not Found', message: 'Event not found' });
+            }
+            else if (error.message === 'SESSION_NOT_FOUND') {
+                res.status(404).json({ success: false, error: 'Not Found', message: 'Session not found for this event' });
+            }
+            else if (error.message === 'EVENT_ID_REQUIRED') {
+                res.status(400).json({ success: false, error: 'Bad Request', message: 'eventId is required' });
+            }
+            else if (error.message === 'RSVP_DECLINED') {
+                res.status(400).json({ success: false, error: 'Bad Request', message: 'Check-in denied: Invitee RSVP is DECLINED' });
+            }
+            else if (error.message === 'RSVP_PENDING') {
+                res.status(400).json({ success: false, error: 'Bad Request', message: 'Check-in denied: Invitee RSVP is PENDING and unconfirmed entry is disabled' });
+            }
+            else if (error.message === 'FORBIDDEN' || error.message === 'STAFF_EVENT_FORBIDDEN') {
+                res.status(403).json({ success: false, error: 'Forbidden', message: 'You are not authorized for this event' });
+            }
+            else if (error.message === 'STAFF_SESSION_FORBIDDEN') {
+                res.status(403).json({ success: false, error: 'Forbidden', message: 'Staff is not assigned to check in guests for this session' });
+            }
+            else if (error.message === 'INVITEE_SESSION_DENIED') {
+                res.status(403).json({ success: false, error: 'Forbidden', message: 'Invitee does not have permission for this session' });
+            }
+            else if (error.message === 'ONLY_ONCE_VIOLATION') {
+                res.status(409).json({ success: false, error: 'Conflict', message: 'Invitee has already checked into this session (ONLY_ONCE rule)' });
+            }
+            else if (error.message === 'DUPLICATE_CHECKIN' || error.code === 11000) {
+                res.status(409).json({ success: false, error: 'Conflict', message: 'Invitee has already checked in' });
+            }
+            else if (error.message === 'CROSS_SESSION_CONFLICT') {
+                res.status(409).json({ success: false, error: 'Conflict', message: 'Cross-session conflict: Invitee has already checked into another session for this event' });
+            }
+            else {
+                next(error);
+            }
+        }
+    },
+    async getCheckIns(req, res, next) {
+        try {
+            const actor = {
+                userId: req.user.userId,
+                role: req.user.role
+            };
+            const eventId = req.params.eventId;
+            const options = {
+                sessionId: req.query.sessionId,
+                checkInMethod: req.query.checkInMethod,
+                page: req.query.page ? parseInt(req.query.page) : 1,
+                limit: req.query.limit ? parseInt(req.query.limit) : 20
+            };
+            const result = await checkIn_service_1.checkInService.getCheckIns(actor, eventId, options);
+            res.status(200).json({
+                success: true,
+                data: result.checkIns,
+                meta: {
+                    page: result.page,
+                    limit: result.limit,
+                    total: result.total,
+                    totalPages: result.totalPages
+                }
+            });
+        }
+        catch (error) {
+            if (error.message === 'EVENT_NOT_FOUND') {
+                res.status(404).json({ success: false, error: 'Not Found', message: 'Event not found' });
+            }
+            else if (error.message === 'FORBIDDEN' || error.message === 'STAFF_EVENT_FORBIDDEN') {
+                res.status(403).json({ success: false, error: 'Forbidden', message: 'You are not authorized for this event' });
+            }
+            else if (error.message === 'STAFF_SESSION_FORBIDDEN') {
+                res.status(403).json({ success: false, error: 'Forbidden', message: 'Staff is not authorized to retrieve logs for this session' });
+            }
+            else {
+                next(error);
+            }
+        }
+    }
+};

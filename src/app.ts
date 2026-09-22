@@ -13,6 +13,7 @@ import { eventInviteeRoutes, inviteeRoutes } from './routes/invitee.routes';
 import invitationRoutes from './routes/invitation.routes';
 import publicInvitationRoutes from './routes/publicInvitation.routes';
 import { eventAssignmentRoutes, assignmentRoutes, myAssignmentRoutes } from './routes/systemUserAssignment.routes';
+import checkInRoutes, { eventCheckInRoutes } from './routes/checkIn.routes';
 
 const app = express();
 
@@ -44,6 +45,8 @@ app.use('/api/v1/events/:eventId/invitations', invitationRoutes);
 app.use('/api/v1/public/invitations', publicInvitationRoutes);
 app.use('/api/v1/assignments', assignmentRoutes);
 app.use('/api/v1/users/me/assignments', myAssignmentRoutes);
+app.use('/api/v1/checkins', checkInRoutes);
+app.use('/api/v1/events/:eventId/checkins', eventCheckInRoutes);
 
 // Global error handler should be the last middleware
 app.use(errorHandler);
