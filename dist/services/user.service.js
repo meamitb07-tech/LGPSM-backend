@@ -71,5 +71,12 @@ exports.userService = {
             role: data.role
         });
         return user;
+    },
+    async getUsers(role) {
+        const query = { isActive: true };
+        if (role) {
+            query.role = role;
+        }
+        return await user_repository_1.userRepository.find(query);
     }
 };

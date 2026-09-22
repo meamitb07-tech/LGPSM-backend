@@ -20,12 +20,12 @@ const validate = (schema: ZodSchema) => (req: Request, res: Response, next: Next
 router.use(authenticate);
 
 // POST /api/v1/events/:eventId/invitations/send
-router.post('/send', authorizeRoles(Role.ORGANIZER), validate(sendInvitationSchema), invitationController.sendInvitations);
+router.post('/send', authorizeRoles(Role.ORGANIZER, Role.ADMIN), validate(sendInvitationSchema), invitationController.sendInvitations);
 
 // POST /api/v1/events/:eventId/invitations/resend
-router.post('/resend', authorizeRoles(Role.ORGANIZER), validate(resendInvitationSchema), invitationController.resendInvitations);
+router.post('/resend', authorizeRoles(Role.ORGANIZER, Role.ADMIN), validate(resendInvitationSchema), invitationController.resendInvitations);
 
 // GET /api/v1/events/:eventId/invitations
-router.get('/', authorizeRoles(Role.ORGANIZER), invitationController.getInvitations);
+router.get('/', authorizeRoles(Role.ORGANIZER, Role.ADMIN), invitationController.getInvitations);
 
 export default router;

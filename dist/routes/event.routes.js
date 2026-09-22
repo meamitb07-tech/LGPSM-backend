@@ -19,10 +19,12 @@ const validate = (schema) => (req, res, next) => {
 };
 // All event routes require authentication
 router.use(authenticate_1.authenticate);
-// Organizer specific routes
-router.post('/', (0, authorizeRoles_1.authorizeRoles)(User_1.Role.ORGANIZER), validate(event_validator_1.createEventSchema), event_controller_1.eventController.createEvent);
-router.get('/', (0, authorizeRoles_1.authorizeRoles)(User_1.Role.ORGANIZER), event_controller_1.eventController.getEvents);
-router.get('/:eventId', (0, authorizeRoles_1.authorizeRoles)(User_1.Role.ORGANIZER), event_controller_1.eventController.getEventById);
-router.patch('/:eventId', (0, authorizeRoles_1.authorizeRoles)(User_1.Role.ORGANIZER), validate(event_validator_1.updateEventSchema), event_controller_1.eventController.updateEvent);
-router.delete('/:eventId', (0, authorizeRoles_1.authorizeRoles)(User_1.Role.ORGANIZER), event_controller_1.eventController.deleteEvent);
+// Cleanup route - ADMIN ONLY
+router.post('/:eventId/cleanup', (0, authorizeRoles_1.authorizeRoles)(User_1.Role.ADMIN), event_controller_1.eventController.cleanupEventData);
+// Routes accessible to ADMIN and ORGANIZER
+router.post('/', (0, authorizeRoles_1.authorizeRoles)(User_1.Role.ADMIN, User_1.Role.ORGANIZER), validate(event_validator_1.createEventSchema), event_controller_1.eventController.createEvent);
+router.get('/', (0, authorizeRoles_1.authorizeRoles)(User_1.Role.ADMIN, User_1.Role.ORGANIZER), event_controller_1.eventController.getEvents);
+router.get('/:eventId', (0, authorizeRoles_1.authorizeRoles)(User_1.Role.ADMIN, User_1.Role.ORGANIZER), event_controller_1.eventController.getEventById);
+router.patch('/:eventId', (0, authorizeRoles_1.authorizeRoles)(User_1.Role.ADMIN, User_1.Role.ORGANIZER), validate(event_validator_1.updateEventSchema), event_controller_1.eventController.updateEvent);
+router.delete('/:eventId', (0, authorizeRoles_1.authorizeRoles)(User_1.Role.ADMIN, User_1.Role.ORGANIZER), event_controller_1.eventController.deleteEvent);
 exports.default = router;

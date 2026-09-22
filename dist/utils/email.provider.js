@@ -5,7 +5,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.sendEmail = void 0;
 const nodemailer_1 = __importDefault(require("nodemailer"));
-const sendEmail = async (to, subject, html) => {
+const sendEmail = async (to, subject, html, attachments) => {
     const host = process.env.SMTP_HOST;
     const port = process.env.SMTP_PORT;
     const user = process.env.SMTP_USER;
@@ -28,7 +28,8 @@ const sendEmail = async (to, subject, html) => {
             from: process.env.SMTP_FROM || '"Event Management Platform" <noreply@events.local>',
             to,
             subject,
-            html
+            html,
+            attachments
         });
         // Do not log PII or full response unless in debug mode
         return true;

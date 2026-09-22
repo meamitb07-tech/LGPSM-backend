@@ -9,7 +9,7 @@ export const invitationController = {
       const organizerId = (req as any).user.userId;
 
       const results = await invitationService.sendInvitations(eventId, organizerId, inviteeIds, channel);
-      return res.status(200).json({ message: 'Invitations processed', results });
+      return res.status(200).json({ success: true, message: 'Invitations processed successfully', results });
     } catch (error: any) {
       if (error.message === 'EVENT_NOT_FOUND') return res.status(404).json({ error: 'Not Found', message: 'Event not found or access denied' });
       if (error.message === 'INVALID_INVITEES') return res.status(400).json({ error: 'Bad Request', message: 'One or more invitees do not belong to this event' });
@@ -24,7 +24,7 @@ export const invitationController = {
       const organizerId = (req as any).user.userId;
 
       const results = await invitationService.resendInvitations(eventId, organizerId, invitationIds);
-      return res.status(200).json({ message: 'Invitations resend processed', results });
+      return res.status(200).json({ success: true, message: 'Invitations resent successfully', results });
     } catch (error: any) {
       if (error.message === 'EVENT_NOT_FOUND') return res.status(404).json({ error: 'Not Found', message: 'Event not found or access denied' });
       if (error.message === 'INVALID_INVITATIONS') return res.status(400).json({ error: 'Bad Request', message: 'One or more invitations do not belong to this event' });

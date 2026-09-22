@@ -42,5 +42,13 @@ export const userService = {
     });
 
     return user;
+  },
+
+  async getUsers(role?: string) {
+    const query: any = { isActive: true };
+    if (role) {
+      query.role = role;
+    }
+    return await userRepository.find(query);
   }
 };

@@ -9,9 +9,16 @@ const Event_1 = require("../models/Event");
 const User_1 = require("../models/User");
 const Session_1 = require("../models/Session");
 const mongoose_1 = __importDefault(require("mongoose"));
+async function findAccessibleEvent(eventId, organizerId) {
+    const requestingUser = await User_1.User.findById(organizerId);
+    if (requestingUser?.role === User_1.Role.ADMIN) {
+        return await Event_1.Event.findById(eventId);
+    }
+    return await Event_1.Event.findOne({ _id: eventId, organizerId });
+}
 exports.systemUserAssignmentService = {
     async createAssignment(eventId, organizerId, data) {
-        const event = await Event_1.Event.findOne({ _id: eventId, organizerId });
+        const event = await findAccessibleEvent(eventId, organizerId);
         if (!event) {
             throw new Error('EVENT_NOT_FOUND');
         }
@@ -40,7 +47,7 @@ exports.systemUserAssignmentService = {
         return await systemUserAssignment_repository_1.systemUserAssignmentRepository.create(assignmentData);
     },
     async getAssignmentsByEvent(eventId, organizerId) {
-        const event = await Event_1.Event.findOne({ _id: eventId, organizerId });
+        const event = await findAccessibleEvent(eventId, organizerId);
         if (!event) {
             throw new Error('EVENT_NOT_FOUND');
         }
@@ -54,7 +61,7 @@ exports.systemUserAssignmentService = {
         if (!assignment) {
             throw new Error('ASSIGNMENT_NOT_FOUND');
         }
-        const event = await Event_1.Event.findOne({ _id: assignment.eventId, organizerId });
+        const event = await findAccessibleEvent(assignment.eventId.toString(), organizerId);
         if (!event) {
             throw new Error('ASSIGNMENT_NOT_FOUND');
         }
@@ -78,7 +85,7 @@ exports.systemUserAssignmentService = {
         if (!assignment) {
             throw new Error('ASSIGNMENT_NOT_FOUND');
         }
-        const event = await Event_1.Event.findOne({ _id: assignment.eventId, organizerId });
+        const event = await findAccessibleEvent(assignment.eventId.toString(), organizerId);
         if (!event) {
             throw new Error('ASSIGNMENT_NOT_FOUND');
         }

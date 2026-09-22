@@ -52,6 +52,7 @@ export interface IEvent extends Document {
     bannerKey?: string;
   };
   status: EventStatus;
+  operationalDataCleared?: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -96,7 +97,8 @@ const EventSchema: Schema = new Schema(
       logoKey: { type: String },
       bannerKey: { type: String }
     },
-    status: { type: String, enum: Object.values(EventStatus), default: EventStatus.DRAFT, required: true }
+    status: { type: String, enum: Object.values(EventStatus), default: EventStatus.DRAFT, required: true },
+    operationalDataCleared: { type: Boolean, default: false }
   },
   {
     timestamps: true

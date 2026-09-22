@@ -23,6 +23,13 @@ router.use(authenticate);
 router.get('/profile', userController.getProfile);
 router.patch('/profile', validate(updateProfileSchema), userController.updateProfile);
 
+// Endpoint for Admins and Organizers to list users (supports ?role=SYSTEM_USER)
+router.get(
+  '/',
+  authorizeRoles(Role.ADMIN, Role.ORGANIZER),
+  userController.getUsers
+);
+
 // Endpoint for Admins and Organizers to create sub-users
 router.post(
   '/', 

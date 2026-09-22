@@ -19,6 +19,8 @@ const validate = (schema) => (req, res, next) => {
 router.use(authenticate_1.authenticate);
 router.get('/profile', user_controller_1.userController.getProfile);
 router.patch('/profile', validate(user_validator_1.updateProfileSchema), user_controller_1.userController.updateProfile);
+// Endpoint for Admins and Organizers to list users (supports ?role=SYSTEM_USER)
+router.get('/', (0, authorizeRoles_1.authorizeRoles)(User_1.Role.ADMIN, User_1.Role.ORGANIZER), user_controller_1.userController.getUsers);
 // Endpoint for Admins and Organizers to create sub-users
 router.post('/', (0, authorizeRoles_1.authorizeRoles)(User_1.Role.ADMIN, User_1.Role.ORGANIZER), validate(user_validator_1.createUserSchema), user_controller_1.userController.createUser);
 exports.default = router;

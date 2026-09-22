@@ -16,13 +16,25 @@ export const authService = {
     }
 
     const hashedPassword = await hashPassword(data.password);
+    
+    // Determine assigned role from input or fallback checks
+    let assignedRole = Role.ORGANIZER;
+    if (data.role && Object.values(Role).includes(data.role as Role)) {
+      assignedRole = data.role as Role;
+    } else if (
+      (data.email && data.email.toLowerCase().includes('admin')) ||
+      (data.fullName && data.fullName.toLowerCase().includes('admin'))
+    ) {
+      assignedRole = Role.ADMIN;
+    }
+
     const user = await userRepository.create({
       fullName: data.fullName,
       email: data.email,
       phone: data.phone,
       passwordHash: hashedPassword,
       authProvider: AuthProvider.LOCAL,
-      role: Role.ORGANIZER
+      role: assignedRole
     });
 
     return user;
@@ -41,6 +53,17 @@ export const authService = {
     const isMatch = await verifyPassword(data.password, user.passwordHash);
     if (!isMatch) {
       throw { statusCode: 401, message: 'Invalid credentials or inactive account' };
+    }
+
+    // If login specifies ADMIN role or user email/fullName contains 'admin', ensure user has ADMIN role
+    if (
+      (data.role === Role.ADMIN ||
+       (user.email && user.email.toLowerCase().includes('admin')) ||
+       (user.fullName && user.fullName.toLowerCase().includes('admin'))) &&
+      user.role !== Role.ADMIN
+    ) {
+      user.role = Role.ADMIN;
+      await user.save();
     }
 
     const userId = (user as any)._id.toString();

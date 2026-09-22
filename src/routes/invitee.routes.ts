@@ -31,12 +31,12 @@ const validate = (schema: ZodSchema) => (req: Request, res: Response, next: Next
 export const eventInviteeRoutes = Router({ mergeParams: true });
 eventInviteeRoutes.use(authenticate);
 
-eventInviteeRoutes.post('/', authorizeRoles(Role.ORGANIZER), validate(createInviteeSchema), inviteeController.createInvitee);
-eventInviteeRoutes.get('/', authorizeRoles(Role.ORGANIZER), inviteeController.getInvitees);
-eventInviteeRoutes.put('/session-access/bulk', authorizeRoles(Role.ORGANIZER), validate(bulkUpdateSessionAccessSchema), inviteeController.bulkUpdateSessionAccess);
+eventInviteeRoutes.post('/', authorizeRoles(Role.ADMIN, Role.ORGANIZER), validate(createInviteeSchema), inviteeController.createInvitee);
+eventInviteeRoutes.get('/', authorizeRoles(Role.ADMIN, Role.ORGANIZER), inviteeController.getInvitees);
+eventInviteeRoutes.put('/session-access/bulk', authorizeRoles(Role.ADMIN, Role.ORGANIZER), validate(bulkUpdateSessionAccessSchema), inviteeController.bulkUpdateSessionAccess);
 
 // Upload handling
-eventInviteeRoutes.post('/import', authorizeRoles(Role.ORGANIZER), (req, res, next) => {
+eventInviteeRoutes.post('/import', authorizeRoles(Role.ADMIN, Role.ORGANIZER), (req, res, next) => {
   upload.single('file')(req, res, (err) => {
     if (err instanceof multer.MulterError) {
       if (err.code === 'LIMIT_FILE_SIZE') {
@@ -53,7 +53,7 @@ eventInviteeRoutes.post('/import', authorizeRoles(Role.ORGANIZER), (req, res, ne
 export const inviteeRoutes = Router();
 inviteeRoutes.use(authenticate);
 
-inviteeRoutes.get('/:inviteeId', authorizeRoles(Role.ORGANIZER), inviteeController.getInviteeById);
-inviteeRoutes.patch('/:inviteeId', authorizeRoles(Role.ORGANIZER), validate(updateInviteeSchema), inviteeController.updateInvitee);
-inviteeRoutes.delete('/:inviteeId', authorizeRoles(Role.ORGANIZER), inviteeController.deleteInvitee);
-inviteeRoutes.put('/:inviteeId/session-access', authorizeRoles(Role.ORGANIZER), validate(updateSessionAccessSchema), inviteeController.updateSessionAccess);
+inviteeRoutes.get('/:inviteeId', authorizeRoles(Role.ADMIN, Role.ORGANIZER), inviteeController.getInviteeById);
+inviteeRoutes.patch('/:inviteeId', authorizeRoles(Role.ADMIN, Role.ORGANIZER), validate(updateInviteeSchema), inviteeController.updateInvitee);
+inviteeRoutes.delete('/:inviteeId', authorizeRoles(Role.ADMIN, Role.ORGANIZER), inviteeController.deleteInvitee);
+inviteeRoutes.put('/:inviteeId/session-access', authorizeRoles(Role.ADMIN, Role.ORGANIZER), validate(updateSessionAccessSchema), inviteeController.updateSessionAccess);

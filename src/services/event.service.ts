@@ -1,7 +1,13 @@
 import { eventRepository, EventFilter, Pagination } from '../repositories/event.repository';
-import { IEvent } from '../models/Event';
+import { IEvent, Event, EventStatus } from '../models/Event';
 import { Category } from '../models/Category';
 import { Template } from '../models/Template';
+import { Session } from '../models/Session';
+import { Invitee } from '../models/Invitee';
+import { Invitation } from '../models/Invitation';
+import { CheckIn } from '../models/CheckIn';
+import { SystemUserAssignment } from '../models/SystemUserAssignment';
+import { Role } from '../models/User';
 import mongoose from 'mongoose';
 
 export class EventService {
@@ -12,12 +18,18 @@ export class EventService {
       ? await Category.findById(categoryId) 
       : null;
 
+    if (categoryId && !categoryExists) {
+      const err: any = new Error('CATEGORY_NOT_FOUND');
+      err.statusCode = 400;
+      throw err;
+    }
+
     if (!categoryExists) {
       let defaultCat = await Category.findOne({ name: 'General' });
       if (!defaultCat) {
         defaultCat = await Category.create({ name: 'General', isActive: true });
       }
-      categoryId = defaultCat._id;
+      categoryId = defaultCat?._id;
     }
 
     // Validate Template if provided
@@ -102,6 +114,65 @@ export class EventService {
       throw new Error('DELETION_FAILED');
     }
     return deletedEvent;
+  }
+
+  async cleanupEventOperationalData(eventId: string, actor: { userId: string; role: Role }): Promise<any> {
+    // 1. Authorization: Only ADMIN
+    if (actor.role !== Role.ADMIN) {
+      throw new Error('FORBIDDEN_CLEANUP');
+    }
+
+    // 2. Fetch Event
+    const event = await Event.findById(eventId);
+    if (!event) {
+      throw new Error('EVENT_NOT_FOUND');
+    }
+
+    // 3. Idempotency: If already cleared
+    if (event.operationalDataCleared) {
+      return {
+        event,
+        alreadyCleared: true,
+        cleanedCounts: { sessions: 0, invitees: 0, invitations: 0, checkIns: 0, assignments: 0 }
+      };
+    }
+
+    // 4. Validate Event Has Ended
+    const now = new Date();
+    const endDate = event.schedule?.end ? new Date(event.schedule.end) : null;
+    const isEnded = (endDate && now > endDate) || event.status === EventStatus.COMPLETED;
+
+    if (!isEnded) {
+      throw new Error('EVENT_NOT_ENDED');
+    }
+
+    // 5. Atomic Deletion of Event-Specific Operational Data
+    // DO NOT DELETE GLOBAL USERS (User model)!
+    const eventObjId = new mongoose.Types.ObjectId(eventId);
+
+    const [sessionRes, inviteeRes, invitationRes, checkInRes, assignmentRes] = await Promise.all([
+      Session.deleteMany({ eventId: eventObjId }),
+      Invitee.deleteMany({ eventId: eventObjId }),
+      Invitation.deleteMany({ eventId: eventObjId }),
+      CheckIn.deleteMany({ eventId: eventObjId }),
+      SystemUserAssignment.deleteMany({ eventId: eventObjId }),
+    ]);
+
+    event.operationalDataCleared = true;
+    event.status = EventStatus.COMPLETED;
+    await event.save();
+
+    return {
+      event,
+      alreadyCleared: false,
+      cleanedCounts: {
+        sessions: sessionRes.deletedCount || 0,
+        invitees: inviteeRes.deletedCount || 0,
+        invitations: invitationRes.deletedCount || 0,
+        checkIns: checkInRes.deletedCount || 0,
+        assignments: assignmentRes.deletedCount || 0,
+      }
+    };
   }
 }
 

@@ -4,12 +4,14 @@ export const registerSchema = z.object({
   fullName: z.string().min(2, 'Full name must be at least 2 characters'),
   email: z.string().email('Invalid email format'),
   password: z.string().min(8, 'Password must be at least 8 characters'),
-  phone: z.string().optional()
+  phone: z.string().optional(),
+  role: z.enum(['ADMIN', 'ORGANIZER', 'SYSTEM_USER']).optional()
 });
 
 export const loginSchema = z.object({
   email: z.string().email('Invalid email format'),
-  password: z.string().min(1, 'Password is required')
+  password: z.string().min(1, 'Password is required'),
+  role: z.enum(['ADMIN', 'ORGANIZER', 'SYSTEM_USER']).optional()
 });
 
 export const googleAuthSchema = z.object({

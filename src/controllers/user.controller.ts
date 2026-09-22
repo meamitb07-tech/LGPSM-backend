@@ -30,5 +30,16 @@ export const userController = {
     } catch (error) {
       next(error);
     }
+  },
+
+  async getUsers(req: Request, res: Response, next: NextFunction) {
+    try {
+      if (!req.user) throw { statusCode: 401, message: 'Unauthorized' };
+      const roleFilter = req.query.role as string | undefined;
+      const users = await userService.getUsers(roleFilter);
+      res.status(200).json({ success: true, data: users });
+    } catch (error) {
+      next(error);
+    }
   }
 };

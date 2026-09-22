@@ -15,5 +15,8 @@ exports.userRepository = {
     },
     async updateById(id, updateData) {
         return User_1.User.findByIdAndUpdate(id, updateData, { new: true, runValidators: true });
+    },
+    async find(query = {}) {
+        return User_1.User.find(query).select('-passwordHash').sort({ createdAt: -1 });
     }
 };

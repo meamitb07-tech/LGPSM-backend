@@ -5,8 +5,15 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.eventService = exports.EventService = void 0;
 const event_repository_1 = require("../repositories/event.repository");
+const Event_1 = require("../models/Event");
 const Category_1 = require("../models/Category");
 const Template_1 = require("../models/Template");
+const Session_1 = require("../models/Session");
+const Invitee_1 = require("../models/Invitee");
+const Invitation_1 = require("../models/Invitation");
+const CheckIn_1 = require("../models/CheckIn");
+const SystemUserAssignment_1 = require("../models/SystemUserAssignment");
+const User_1 = require("../models/User");
 const mongoose_1 = __importDefault(require("mongoose"));
 class EventService {
     async createEvent(organizerId, eventData) {
@@ -15,12 +22,17 @@ class EventService {
         let categoryExists = categoryId && mongoose_1.default.Types.ObjectId.isValid(categoryId)
             ? await Category_1.Category.findById(categoryId)
             : null;
+        if (categoryId && !categoryExists) {
+            const err = new Error('CATEGORY_NOT_FOUND');
+            err.statusCode = 400;
+            throw err;
+        }
         if (!categoryExists) {
             let defaultCat = await Category_1.Category.findOne({ name: 'General' });
             if (!defaultCat) {
                 defaultCat = await Category_1.Category.create({ name: 'General', isActive: true });
             }
-            categoryId = defaultCat._id;
+            categoryId = defaultCat?._id;
         }
         // Validate Template if provided
         if (eventData.templateId && mongoose_1.default.Types.ObjectId.isValid(eventData.templateId)) {
@@ -93,6 +105,56 @@ class EventService {
             throw new Error('DELETION_FAILED');
         }
         return deletedEvent;
+    }
+    async cleanupEventOperationalData(eventId, actor) {
+        // 1. Authorization: Only ADMIN
+        if (actor.role !== User_1.Role.ADMIN) {
+            throw new Error('FORBIDDEN_CLEANUP');
+        }
+        // 2. Fetch Event
+        const event = await Event_1.Event.findById(eventId);
+        if (!event) {
+            throw new Error('EVENT_NOT_FOUND');
+        }
+        // 3. Idempotency: If already cleared
+        if (event.operationalDataCleared) {
+            return {
+                event,
+                alreadyCleared: true,
+                cleanedCounts: { sessions: 0, invitees: 0, invitations: 0, checkIns: 0, assignments: 0 }
+            };
+        }
+        // 4. Validate Event Has Ended
+        const now = new Date();
+        const endDate = event.schedule?.end ? new Date(event.schedule.end) : null;
+        const isEnded = (endDate && now > endDate) || event.status === Event_1.EventStatus.COMPLETED;
+        if (!isEnded) {
+            throw new Error('EVENT_NOT_ENDED');
+        }
+        // 5. Atomic Deletion of Event-Specific Operational Data
+        // DO NOT DELETE GLOBAL USERS (User model)!
+        const eventObjId = new mongoose_1.default.Types.ObjectId(eventId);
+        const [sessionRes, inviteeRes, invitationRes, checkInRes, assignmentRes] = await Promise.all([
+            Session_1.Session.deleteMany({ eventId: eventObjId }),
+            Invitee_1.Invitee.deleteMany({ eventId: eventObjId }),
+            Invitation_1.Invitation.deleteMany({ eventId: eventObjId }),
+            CheckIn_1.CheckIn.deleteMany({ eventId: eventObjId }),
+            SystemUserAssignment_1.SystemUserAssignment.deleteMany({ eventId: eventObjId }),
+        ]);
+        event.operationalDataCleared = true;
+        event.status = Event_1.EventStatus.COMPLETED;
+        await event.save();
+        return {
+            event,
+            alreadyCleared: false,
+            cleanedCounts: {
+                sessions: sessionRes.deletedCount || 0,
+                invitees: inviteeRes.deletedCount || 0,
+                invitations: invitationRes.deletedCount || 0,
+                checkIns: checkInRes.deletedCount || 0,
+                assignments: assignmentRes.deletedCount || 0,
+            }
+        };
     }
 }
 exports.EventService = EventService;

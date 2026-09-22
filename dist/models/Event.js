@@ -86,7 +86,8 @@ const EventSchema = new mongoose_1.Schema({
         logoKey: { type: String },
         bannerKey: { type: String }
     },
-    status: { type: String, enum: Object.values(EventStatus), default: EventStatus.DRAFT, required: true }
+    status: { type: String, enum: Object.values(EventStatus), default: EventStatus.DRAFT, required: true },
+    operationalDataCleared: { type: Boolean, default: false }
 }, {
     timestamps: true
 });

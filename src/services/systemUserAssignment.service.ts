@@ -5,9 +5,17 @@ import { User, Role } from '../models/User';
 import { Session } from '../models/Session';
 import mongoose from 'mongoose';
 
+async function findAccessibleEvent(eventId: string, organizerId: string) {
+  const requestingUser = await User.findById(organizerId);
+  if (requestingUser?.role === Role.ADMIN) {
+    return await Event.findById(eventId);
+  }
+  return await Event.findOne({ _id: eventId, organizerId });
+}
+
 export const systemUserAssignmentService = {
   async createAssignment(eventId: string, organizerId: string, data: { userId: string; sessionIds: string[] }): Promise<ISystemUserAssignment> {
-    const event = await Event.findOne({ _id: eventId, organizerId });
+    const event = await findAccessibleEvent(eventId, organizerId);
     if (!event) {
       throw new Error('EVENT_NOT_FOUND');
     }
@@ -42,7 +50,7 @@ export const systemUserAssignmentService = {
   },
 
   async getAssignmentsByEvent(eventId: string, organizerId: string) {
-    const event = await Event.findOne({ _id: eventId, organizerId });
+    const event = await findAccessibleEvent(eventId, organizerId);
     if (!event) {
       throw new Error('EVENT_NOT_FOUND');
     }
@@ -60,7 +68,7 @@ export const systemUserAssignmentService = {
       throw new Error('ASSIGNMENT_NOT_FOUND');
     }
 
-    const event = await Event.findOne({ _id: assignment.eventId, organizerId });
+    const event = await findAccessibleEvent(assignment.eventId.toString(), organizerId);
     if (!event) {
       throw new Error('ASSIGNMENT_NOT_FOUND');
     }
@@ -89,7 +97,7 @@ export const systemUserAssignmentService = {
       throw new Error('ASSIGNMENT_NOT_FOUND');
     }
 
-    const event = await Event.findOne({ _id: assignment.eventId, organizerId });
+    const event = await findAccessibleEvent(assignment.eventId.toString(), organizerId);
     if (!event) {
       throw new Error('ASSIGNMENT_NOT_FOUND');
     }

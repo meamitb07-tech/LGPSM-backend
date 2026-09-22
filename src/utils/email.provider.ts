@@ -1,7 +1,21 @@
 import nodemailer from 'nodemailer';
 import { env } from '../config/env';
 
-export const sendEmail = async (to: string, subject: string, html: string) => {
+export interface EmailAttachment {
+  filename?: string;
+  content?: string | Buffer;
+  path?: string;
+  cid?: string;
+  contentType?: string;
+  encoding?: string;
+}
+
+export const sendEmail = async (
+  to: string,
+  subject: string,
+  html: string,
+  attachments?: EmailAttachment[]
+) => {
   const host = process.env.SMTP_HOST;
   const port = process.env.SMTP_PORT;
   const user = process.env.SMTP_USER;
@@ -27,7 +41,8 @@ export const sendEmail = async (to: string, subject: string, html: string) => {
       from: process.env.SMTP_FROM || '"Event Management Platform" <noreply@events.local>',
       to,
       subject,
-      html
+      html,
+      attachments
     });
     // Do not log PII or full response unless in debug mode
     return true;

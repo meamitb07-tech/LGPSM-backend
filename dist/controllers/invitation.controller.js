@@ -9,7 +9,7 @@ exports.invitationController = {
             const { inviteeIds, channel } = req.body;
             const organizerId = req.user.userId;
             const results = await invitation_service_1.invitationService.sendInvitations(eventId, organizerId, inviteeIds, channel);
-            return res.status(200).json({ message: 'Invitations processed', results });
+            return res.status(200).json({ success: true, message: 'Invitations processed successfully', results });
         }
         catch (error) {
             if (error.message === 'EVENT_NOT_FOUND')
@@ -25,7 +25,7 @@ exports.invitationController = {
             const { invitationIds } = req.body;
             const organizerId = req.user.userId;
             const results = await invitation_service_1.invitationService.resendInvitations(eventId, organizerId, invitationIds);
-            return res.status(200).json({ message: 'Invitations resend processed', results });
+            return res.status(200).json({ success: true, message: 'Invitations resent successfully', results });
         }
         catch (error) {
             if (error.message === 'EVENT_NOT_FOUND')

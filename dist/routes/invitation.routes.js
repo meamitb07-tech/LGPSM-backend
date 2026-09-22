@@ -18,9 +18,9 @@ const validate = (schema) => (req, res, next) => {
 };
 router.use(authenticate_1.authenticate);
 // POST /api/v1/events/:eventId/invitations/send
-router.post('/send', (0, authorizeRoles_1.authorizeRoles)(User_1.Role.ORGANIZER), validate(invitation_validator_1.sendInvitationSchema), invitation_controller_1.invitationController.sendInvitations);
+router.post('/send', (0, authorizeRoles_1.authorizeRoles)(User_1.Role.ORGANIZER, User_1.Role.ADMIN), validate(invitation_validator_1.sendInvitationSchema), invitation_controller_1.invitationController.sendInvitations);
 // POST /api/v1/events/:eventId/invitations/resend
-router.post('/resend', (0, authorizeRoles_1.authorizeRoles)(User_1.Role.ORGANIZER), validate(invitation_validator_1.resendInvitationSchema), invitation_controller_1.invitationController.resendInvitations);
+router.post('/resend', (0, authorizeRoles_1.authorizeRoles)(User_1.Role.ORGANIZER, User_1.Role.ADMIN), validate(invitation_validator_1.resendInvitationSchema), invitation_controller_1.invitationController.resendInvitations);
 // GET /api/v1/events/:eventId/invitations
-router.get('/', (0, authorizeRoles_1.authorizeRoles)(User_1.Role.ORGANIZER), invitation_controller_1.invitationController.getInvitations);
+router.get('/', (0, authorizeRoles_1.authorizeRoles)(User_1.Role.ORGANIZER, User_1.Role.ADMIN), invitation_controller_1.invitationController.getInvitations);
 exports.default = router;

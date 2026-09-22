@@ -18,12 +18,12 @@ const validate = (schema: ZodSchema) => (req: Request, res: Response, next: Next
 export const eventSessionRoutes = Router({ mergeParams: true });
 eventSessionRoutes.use(authenticate);
 
-eventSessionRoutes.post('/', authorizeRoles(Role.ORGANIZER), validate(createSessionSchema), sessionController.createSession);
-eventSessionRoutes.get('/', authorizeRoles(Role.ORGANIZER), sessionController.getSessions);
+eventSessionRoutes.post('/', authorizeRoles(Role.ADMIN, Role.ORGANIZER), validate(createSessionSchema), sessionController.createSession);
+eventSessionRoutes.get('/', authorizeRoles(Role.ADMIN, Role.ORGANIZER), sessionController.getSessions);
 
 export const sessionRoutes = Router();
 sessionRoutes.use(authenticate);
 
-sessionRoutes.get('/:sessionId', authorizeRoles(Role.ORGANIZER), sessionController.getSessionById);
-sessionRoutes.patch('/:sessionId', authorizeRoles(Role.ORGANIZER), validate(updateSessionSchema), sessionController.updateSession);
-sessionRoutes.delete('/:sessionId', authorizeRoles(Role.ORGANIZER), sessionController.deleteSession);
+sessionRoutes.get('/:sessionId', authorizeRoles(Role.ADMIN, Role.ORGANIZER), sessionController.getSessionById);
+sessionRoutes.patch('/:sessionId', authorizeRoles(Role.ADMIN, Role.ORGANIZER), validate(updateSessionSchema), sessionController.updateSession);
+sessionRoutes.delete('/:sessionId', authorizeRoles(Role.ADMIN, Role.ORGANIZER), sessionController.deleteSession);

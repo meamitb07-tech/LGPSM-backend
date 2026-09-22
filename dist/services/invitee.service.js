@@ -196,44 +196,44 @@ exports.inviteeService = {
         const workbook = xlsx.read(fileBuffer, { type: 'buffer' });
         const sheetName = workbook.SheetNames[0];
         const sheet = workbook.Sheets[sheetName];
-        // Get headers
-        const headers = xlsx.utils.sheet_to_json(sheet, { header: 1 })[0] || [];
-        const lowerHeaders = headers.map((h) => String(h).trim().toLowerCase());
-        // Validate CSV headers against configured session fields
-        const requiredStandardHeaders = ['name', 'email', 'mobile', 'dietary preference'];
-        const missingSessions = [];
-        const mismatchedHeaders = [];
-        // Check if all configured event sessions exist in the CSV headers
-        for (const session of eventSessions) {
-            if (!lowerHeaders.includes(session.name.toLowerCase())) {
-                missingSessions.push(session.name);
-            }
+        const rowsRaw = xlsx.utils.sheet_to_json(sheet, { header: 1 }) || [];
+        // Filter out completely blank rows
+        const nonBlankRows = rowsRaw.filter(r => Array.isArray(r) && r.some(cell => cell !== null && cell !== undefined && String(cell).trim() !== ''));
+        if (nonBlankRows.length === 0) {
+            return { totalRows: 0, imported: 0, rejected: 0, duplicateCount: 0, errors: [] };
         }
-        // Check if there are any extra headers that don't belong to standard or sessions
-        for (const header of lowerHeaders) {
-            if (!requiredStandardHeaders.includes(header) && !sessionNameMap.has(header)) {
-                mismatchedHeaders.push(header);
-            }
+        // Check if first row is header
+        let headerRowIdx = -1;
+        let nameColIdx = 0;
+        let emailColIdx = 1;
+        let mobileColIdx = 2;
+        let dietaryColIdx = 3;
+        const sessionColMap = new Map();
+        const firstRowStr = nonBlankRows[0].map((c) => String(c).trim().toLowerCase()).join(' ');
+        const isHeaderPresent = firstRowStr.includes('name') || firstRowStr.includes('email') || firstRowStr.includes('mobile') || firstRowStr.includes('phone');
+        if (isHeaderPresent) {
+            headerRowIdx = 0;
+            const headerCols = nonBlankRows[0].map((c) => String(c).trim().toLowerCase());
+            headerCols.forEach((colStr, colIdx) => {
+                if (colStr.includes('name'))
+                    nameColIdx = colIdx;
+                else if (colStr.includes('email'))
+                    emailColIdx = colIdx;
+                else if (colStr.includes('mobile') || colStr.includes('phone') || colStr.includes('contact'))
+                    mobileColIdx = colIdx;
+                else if (colStr.includes('diet') || colStr.includes('pref') || colStr.includes('food') || colStr.includes('meal') || colStr.includes('veg'))
+                    dietaryColIdx = colIdx;
+                // Check session column match
+                for (const session of eventSessions) {
+                    if (colStr === session.name.toLowerCase()) {
+                        sessionColMap.set(colIdx, session._id.toString());
+                    }
+                }
+            });
         }
-        if (missingSessions.length > 0 || mismatchedHeaders.length > 0) {
-            const errors = [];
-            if (missingSessions.length > 0) {
-                errors.push(`Missing required session columns: ${missingSessions.join(', ')}`);
-            }
-            if (mismatchedHeaders.length > 0) {
-                errors.push(`Mismatched/Unknown columns found: ${mismatchedHeaders.join(', ')}`);
-            }
-            return {
-                totalRows: 0,
-                imported: 0,
-                rejected: 0,
-                duplicateCount: 0,
-                errors: [{ row: 0, error: 'Header Validation Failed: ' + errors.join('. ') }]
-            };
-        }
-        const rows = xlsx.utils.sheet_to_json(sheet, { defval: '' });
+        const dataRows = isHeaderPresent ? nonBlankRows.slice(1) : nonBlankRows;
         const results = {
-            totalRows: rows.length,
+            totalRows: dataRows.length,
             imported: 0,
             rejected: 0,
             duplicateCount: 0,
@@ -242,13 +242,15 @@ exports.inviteeService = {
         const validInviteesToInsert = [];
         const emailsInImport = new Set();
         const mobilesInImport = new Set();
-        for (let i = 0; i < rows.length; i++) {
-            const row = rows[i];
-            const rowNum = i + 2; // +1 for 0-index, +1 for header
-            const name = String(row['Name'] || '').trim();
-            const email = String(row['Email'] || '').trim().toLowerCase();
-            const mobile = String(row['Mobile'] || '').trim();
-            const dietaryPreference = String(row['Dietary preference'] || '').trim();
+        for (let i = 0; i < dataRows.length; i++) {
+            const row = dataRows[i];
+            const rowNum = i + (isHeaderPresent ? 2 : 1);
+            const name = String(row[nameColIdx] !== undefined && row[nameColIdx] !== null ? row[nameColIdx] : (row[0] || '')).trim();
+            const email = String(row[emailColIdx] !== undefined && row[emailColIdx] !== null ? row[emailColIdx] : (row[1] || '')).trim().toLowerCase();
+            const mobile = String(row[mobileColIdx] !== undefined && row[mobileColIdx] !== null ? row[mobileColIdx] : (row[2] || '')).trim();
+            const dietaryPreference = String(row[dietaryColIdx] !== undefined && row[dietaryColIdx] !== null
+                ? row[dietaryColIdx]
+                : (row[3] !== undefined && row[3] !== null ? row[3] : '')).trim();
             if (!name) {
                 results.rejected++;
                 results.errors.push({ row: rowNum, error: 'Name is required' });
@@ -266,44 +268,44 @@ exports.inviteeService = {
                 results.errors.push({ row: rowNum, error: 'Duplicate within file' });
                 continue;
             }
-            // Check DB duplicates
-            const dbDuplicates = await invitee_repository_1.inviteeRepository.findByEmailOrMobile(eventId, email, mobile);
-            if (dbDuplicates.length > 0) {
-                results.rejected++;
-                results.duplicateCount++;
-                results.errors.push({ row: rowNum, error: 'Duplicate in database' });
-                continue;
-            }
             if (email)
                 emailsInImport.add(email);
             if (mobile)
                 mobilesInImport.add(mobile);
             // Process Session Access
             const sessionAccess = [];
-            let sessionError = false;
-            for (const [key, value] of Object.entries(row)) {
-                if (['Name', 'Email', 'Mobile', 'Dietary preference'].includes(key))
-                    continue;
-                // Any other column is assumed to be a session name
-                const lowerKey = key.toLowerCase();
-                const sessionId = sessionNameMap.get(lowerKey);
-                if (!sessionId)
-                    continue; // Already validated headers
-                const val = String(value).trim().toUpperCase();
-                if (val !== 'Y' && val !== 'N' && val !== '') {
-                    sessionError = true;
-                    results.errors.push({ row: rowNum, error: `Invalid access value for session ${key}: ${val}. Expected Y or N.` });
-                    break;
-                }
-                if (val === 'Y') {
-                    sessionAccess.push({ sessionId, allowed: true });
-                }
-                else if (val === 'N') {
-                    sessionAccess.push({ sessionId, allowed: false });
-                }
+            if (sessionColMap.size > 0) {
+                sessionColMap.forEach((sessionId, colIdx) => {
+                    const val = String(row[colIdx] || '').trim().toUpperCase();
+                    if (val === 'Y' || val === 'YES' || val === 'TRUE' || val === '1') {
+                        sessionAccess.push({ sessionId, allowed: true });
+                    }
+                    else if (val === 'N' || val === 'NO' || val === 'FALSE' || val === '0') {
+                        sessionAccess.push({ sessionId, allowed: false });
+                    }
+                    else {
+                        sessionAccess.push({ sessionId, allowed: true });
+                    }
+                });
             }
-            if (sessionError) {
-                results.rejected++;
+            else {
+                // Default access to all event sessions if no session columns specified
+                eventSessions.forEach(session => {
+                    sessionAccess.push({ sessionId: session._id, allowed: true });
+                });
+            }
+            // Check DB duplicates - update if exists so re-imported rows are updated & kept
+            const dbDuplicates = await invitee_repository_1.inviteeRepository.findByEmailOrMobile(eventId, email, mobile);
+            if (dbDuplicates.length > 0) {
+                const existing = dbDuplicates[0];
+                await invitee_repository_1.inviteeRepository.update(existing._id.toString(), {
+                    name: name || existing.name,
+                    email: email || existing.email,
+                    mobile: mobile || existing.mobile,
+                    dietaryPreference: dietaryPreference || existing.dietaryPreference,
+                    sessionAccess: sessionAccess.length > 0 ? sessionAccess : existing.sessionAccess
+                });
+                results.imported++;
                 continue;
             }
             validInviteesToInsert.push({
@@ -319,7 +321,7 @@ exports.inviteeService = {
         }
         if (validInviteesToInsert.length > 0) {
             await invitee_repository_1.inviteeRepository.insertMany(validInviteesToInsert);
-            results.imported = validInviteesToInsert.length;
+            results.imported += validInviteesToInsert.length;
         }
         return results;
     }

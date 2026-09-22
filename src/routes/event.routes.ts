@@ -21,11 +21,14 @@ const validate = (schema: ZodSchema) => (req: Request, res: Response, next: Next
 // All event routes require authentication
 router.use(authenticate);
 
-// Organizer specific routes
-router.post('/', authorizeRoles(Role.ORGANIZER), validate(createEventSchema), eventController.createEvent);
-router.get('/', authorizeRoles(Role.ORGANIZER), eventController.getEvents);
-router.get('/:eventId', authorizeRoles(Role.ORGANIZER), eventController.getEventById);
-router.patch('/:eventId', authorizeRoles(Role.ORGANIZER), validate(updateEventSchema), eventController.updateEvent);
-router.delete('/:eventId', authorizeRoles(Role.ORGANIZER), eventController.deleteEvent);
+// Cleanup route - ADMIN ONLY
+router.post('/:eventId/cleanup', authorizeRoles(Role.ADMIN), eventController.cleanupEventData);
+
+// Routes accessible to ADMIN and ORGANIZER
+router.post('/', authorizeRoles(Role.ADMIN, Role.ORGANIZER), validate(createEventSchema), eventController.createEvent);
+router.get('/', authorizeRoles(Role.ADMIN, Role.ORGANIZER), eventController.getEvents);
+router.get('/:eventId', authorizeRoles(Role.ADMIN, Role.ORGANIZER), eventController.getEventById);
+router.patch('/:eventId', authorizeRoles(Role.ADMIN, Role.ORGANIZER), validate(updateEventSchema), eventController.updateEvent);
+router.delete('/:eventId', authorizeRoles(Role.ADMIN, Role.ORGANIZER), eventController.deleteEvent);
 
 export default router;

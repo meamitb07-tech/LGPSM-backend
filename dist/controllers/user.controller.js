@@ -35,5 +35,17 @@ exports.userController = {
         catch (error) {
             next(error);
         }
+    },
+    async getUsers(req, res, next) {
+        try {
+            if (!req.user)
+                throw { statusCode: 401, message: 'Unauthorized' };
+            const roleFilter = req.query.role;
+            const users = await user_service_1.userService.getUsers(roleFilter);
+            res.status(200).json({ success: true, data: users });
+        }
+        catch (error) {
+            next(error);
+        }
     }
 };

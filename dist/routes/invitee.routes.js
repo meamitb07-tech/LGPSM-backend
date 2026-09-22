@@ -34,11 +34,11 @@ const validate = (schema) => (req, res, next) => {
 };
 exports.eventInviteeRoutes = (0, express_1.Router)({ mergeParams: true });
 exports.eventInviteeRoutes.use(authenticate_1.authenticate);
-exports.eventInviteeRoutes.post('/', (0, authorizeRoles_1.authorizeRoles)(User_1.Role.ORGANIZER), validate(invitee_validator_1.createInviteeSchema), invitee_controller_1.inviteeController.createInvitee);
-exports.eventInviteeRoutes.get('/', (0, authorizeRoles_1.authorizeRoles)(User_1.Role.ORGANIZER), invitee_controller_1.inviteeController.getInvitees);
-exports.eventInviteeRoutes.put('/session-access/bulk', (0, authorizeRoles_1.authorizeRoles)(User_1.Role.ORGANIZER), validate(invitee_validator_1.bulkUpdateSessionAccessSchema), invitee_controller_1.inviteeController.bulkUpdateSessionAccess);
+exports.eventInviteeRoutes.post('/', (0, authorizeRoles_1.authorizeRoles)(User_1.Role.ADMIN, User_1.Role.ORGANIZER), validate(invitee_validator_1.createInviteeSchema), invitee_controller_1.inviteeController.createInvitee);
+exports.eventInviteeRoutes.get('/', (0, authorizeRoles_1.authorizeRoles)(User_1.Role.ADMIN, User_1.Role.ORGANIZER), invitee_controller_1.inviteeController.getInvitees);
+exports.eventInviteeRoutes.put('/session-access/bulk', (0, authorizeRoles_1.authorizeRoles)(User_1.Role.ADMIN, User_1.Role.ORGANIZER), validate(invitee_validator_1.bulkUpdateSessionAccessSchema), invitee_controller_1.inviteeController.bulkUpdateSessionAccess);
 // Upload handling
-exports.eventInviteeRoutes.post('/import', (0, authorizeRoles_1.authorizeRoles)(User_1.Role.ORGANIZER), (req, res, next) => {
+exports.eventInviteeRoutes.post('/import', (0, authorizeRoles_1.authorizeRoles)(User_1.Role.ADMIN, User_1.Role.ORGANIZER), (req, res, next) => {
     upload.single('file')(req, res, (err) => {
         if (err instanceof multer_1.default.MulterError) {
             if (err.code === 'LIMIT_FILE_SIZE') {
@@ -54,7 +54,7 @@ exports.eventInviteeRoutes.post('/import', (0, authorizeRoles_1.authorizeRoles)(
 }, invitee_controller_1.inviteeController.importExcel);
 exports.inviteeRoutes = (0, express_1.Router)();
 exports.inviteeRoutes.use(authenticate_1.authenticate);
-exports.inviteeRoutes.get('/:inviteeId', (0, authorizeRoles_1.authorizeRoles)(User_1.Role.ORGANIZER), invitee_controller_1.inviteeController.getInviteeById);
-exports.inviteeRoutes.patch('/:inviteeId', (0, authorizeRoles_1.authorizeRoles)(User_1.Role.ORGANIZER), validate(invitee_validator_1.updateInviteeSchema), invitee_controller_1.inviteeController.updateInvitee);
-exports.inviteeRoutes.delete('/:inviteeId', (0, authorizeRoles_1.authorizeRoles)(User_1.Role.ORGANIZER), invitee_controller_1.inviteeController.deleteInvitee);
-exports.inviteeRoutes.put('/:inviteeId/session-access', (0, authorizeRoles_1.authorizeRoles)(User_1.Role.ORGANIZER), validate(invitee_validator_1.updateSessionAccessSchema), invitee_controller_1.inviteeController.updateSessionAccess);
+exports.inviteeRoutes.get('/:inviteeId', (0, authorizeRoles_1.authorizeRoles)(User_1.Role.ADMIN, User_1.Role.ORGANIZER), invitee_controller_1.inviteeController.getInviteeById);
+exports.inviteeRoutes.patch('/:inviteeId', (0, authorizeRoles_1.authorizeRoles)(User_1.Role.ADMIN, User_1.Role.ORGANIZER), validate(invitee_validator_1.updateInviteeSchema), invitee_controller_1.inviteeController.updateInvitee);
+exports.inviteeRoutes.delete('/:inviteeId', (0, authorizeRoles_1.authorizeRoles)(User_1.Role.ADMIN, User_1.Role.ORGANIZER), invitee_controller_1.inviteeController.deleteInvitee);
+exports.inviteeRoutes.put('/:inviteeId/session-access', (0, authorizeRoles_1.authorizeRoles)(User_1.Role.ADMIN, User_1.Role.ORGANIZER), validate(invitee_validator_1.updateSessionAccessSchema), invitee_controller_1.inviteeController.updateSessionAccess);

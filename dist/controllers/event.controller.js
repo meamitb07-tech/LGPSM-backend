@@ -91,5 +91,37 @@ exports.eventController = {
                 next(error);
             }
         }
+    },
+    async cleanupEventData(req, res, next) {
+        try {
+            const actor = {
+                userId: req.user.userId,
+                role: req.user.role
+            };
+            const eventId = req.params.eventId;
+            const result = await event_service_1.eventService.cleanupEventOperationalData(eventId, actor);
+            res.status(200).json({
+                success: true,
+                message: result.alreadyCleared
+                    ? 'Operational data has already been cleared for this event'
+                    : 'Event operational data successfully cleared',
+                data: result.event,
+                cleanedCounts: result.cleanedCounts
+            });
+        }
+        catch (error) {
+            if (error.message === 'EVENT_NOT_FOUND') {
+                res.status(404).json({ success: false, error: 'Not Found', message: 'Event not found' });
+            }
+            else if (error.message === 'FORBIDDEN_CLEANUP') {
+                res.status(403).json({ success: false, error: 'Forbidden', message: 'Only authorized ADMIN can perform event operational data cleanup' });
+            }
+            else if (error.message === 'EVENT_NOT_ENDED') {
+                res.status(400).json({ success: false, error: 'Bad Request', message: 'Cannot clean operational data for an active or unended event' });
+            }
+            else {
+                next(error);
+            }
+        }
     }
 };

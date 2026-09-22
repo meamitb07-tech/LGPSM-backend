@@ -16,5 +16,9 @@ export const userRepository = {
 
   async updateById(id: string, updateData: Partial<IUser>): Promise<IUser | null> {
     return User.findByIdAndUpdate(id, updateData, { new: true, runValidators: true });
+  },
+
+  async find(query: any = {}): Promise<IUser[]> {
+    return User.find(query).select('-passwordHash').sort({ createdAt: -1 });
   }
 };

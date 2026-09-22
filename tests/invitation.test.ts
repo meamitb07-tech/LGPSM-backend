@@ -119,4 +119,37 @@ describe('Invitation Service', () => {
       invitationService.sendInvitations(eventId.toString(), wrongOrganizer, [inviteeId.toString()], DeliveryChannel.EMAIL)
     ).rejects.toThrow('EVENT_NOT_FOUND');
   });
+
+  it('should generate inline CID QR attachment and be scanner compatible with checkInService', async () => {
+    (sendEmail as jest.Mock).mockResolvedValue(true);
+
+    const results = await invitationService.sendInvitations(
+      eventId.toString(),
+      organizerId.toString(),
+      [inviteeId.toString()],
+      DeliveryChannel.EMAIL
+    );
+
+    expect(results[0].status).toBe(InvitationDeliveryStatus.SENT);
+    expect(sendEmail).toHaveBeenCalledTimes(1);
+
+    const [recipientEmail, subject, html, attachments] = (sendEmail as jest.Mock).mock.calls[0];
+    expect(recipientEmail).toBe('test@example.com');
+    expect(subject).toBe('Invitation: Test Event');
+    expect(html).toContain('cid:invitation-qr-');
+    expect(attachments).toBeDefined();
+    expect(attachments.length).toBe(1);
+    expect(attachments[0].filename).toBe('invitation-qr.png');
+    expect(attachments[0].contentType).toBe('image/png');
+    expect(attachments[0].cid).toContain('invitation-qr-');
+    expect(Buffer.isBuffer(attachments[0].content)).toBe(true);
+
+    // Verify token stored in DB matches the hashed invitation token
+    const invitee = await Invitee.findById(inviteeId);
+    expect(invitee?.qrTokenHash).toBeDefined();
+
+    // Verify raw token extracted from QR/URL works with checkInService.extractRawToken
+    const invitation = await Invitation.findOne({ inviteeId });
+    expect(invitation?.tokenHash).toEqual(invitee?.qrTokenHash);
+  });
 });

@@ -23,12 +23,12 @@ const validate = (schema) => (req, res, next) => {
 };
 exports.eventAssignmentRoutes = (0, express_1.Router)({ mergeParams: true });
 exports.eventAssignmentRoutes.use(authenticate_1.authenticate);
-exports.eventAssignmentRoutes.post('/', (0, authorizeRoles_1.authorizeRoles)(User_1.Role.ORGANIZER), validate(systemUserAssignment_validator_1.createAssignmentSchema), systemUserAssignment_controller_1.systemUserAssignmentController.createAssignment);
-exports.eventAssignmentRoutes.get('/', (0, authorizeRoles_1.authorizeRoles)(User_1.Role.ORGANIZER), systemUserAssignment_controller_1.systemUserAssignmentController.getAssignmentsByEvent);
+exports.eventAssignmentRoutes.post('/', (0, authorizeRoles_1.authorizeRoles)(User_1.Role.ORGANIZER, User_1.Role.ADMIN), validate(systemUserAssignment_validator_1.createAssignmentSchema), systemUserAssignment_controller_1.systemUserAssignmentController.createAssignment);
+exports.eventAssignmentRoutes.get('/', (0, authorizeRoles_1.authorizeRoles)(User_1.Role.ORGANIZER, User_1.Role.ADMIN), systemUserAssignment_controller_1.systemUserAssignmentController.getAssignmentsByEvent);
 exports.assignmentRoutes = (0, express_1.Router)();
 exports.assignmentRoutes.use(authenticate_1.authenticate);
-exports.assignmentRoutes.patch('/:assignmentId', (0, authorizeRoles_1.authorizeRoles)(User_1.Role.ORGANIZER), validate(systemUserAssignment_validator_1.updateAssignmentSchema), systemUserAssignment_controller_1.systemUserAssignmentController.updateAssignment);
-exports.assignmentRoutes.delete('/:assignmentId', (0, authorizeRoles_1.authorizeRoles)(User_1.Role.ORGANIZER), systemUserAssignment_controller_1.systemUserAssignmentController.deleteAssignment);
+exports.assignmentRoutes.patch('/:assignmentId', (0, authorizeRoles_1.authorizeRoles)(User_1.Role.ORGANIZER, User_1.Role.ADMIN), validate(systemUserAssignment_validator_1.updateAssignmentSchema), systemUserAssignment_controller_1.systemUserAssignmentController.updateAssignment);
+exports.assignmentRoutes.delete('/:assignmentId', (0, authorizeRoles_1.authorizeRoles)(User_1.Role.ORGANIZER, User_1.Role.ADMIN), systemUserAssignment_controller_1.systemUserAssignmentController.deleteAssignment);
 exports.myAssignmentRoutes = (0, express_1.Router)();
 exports.myAssignmentRoutes.use(authenticate_1.authenticate);
 exports.myAssignmentRoutes.get('/', (0, authorizeRoles_1.authorizeRoles)(User_1.Role.SYSTEM_USER), systemUserAssignment_controller_1.systemUserAssignmentController.getMyAssignments);

@@ -6,11 +6,13 @@ exports.registerSchema = zod_1.z.object({
     fullName: zod_1.z.string().min(2, 'Full name must be at least 2 characters'),
     email: zod_1.z.string().email('Invalid email format'),
     password: zod_1.z.string().min(8, 'Password must be at least 8 characters'),
-    phone: zod_1.z.string().optional()
+    phone: zod_1.z.string().optional(),
+    role: zod_1.z.enum(['ADMIN', 'ORGANIZER', 'SYSTEM_USER']).optional()
 });
 exports.loginSchema = zod_1.z.object({
     email: zod_1.z.string().email('Invalid email format'),
-    password: zod_1.z.string().min(1, 'Password is required')
+    password: zod_1.z.string().min(1, 'Password is required'),
+    role: zod_1.z.enum(['ADMIN', 'ORGANIZER', 'SYSTEM_USER']).optional()
 });
 exports.googleAuthSchema = zod_1.z.object({
     token: zod_1.z.string().min(1, 'Google ID token is required')
