@@ -51,6 +51,13 @@ const invitation_routes_1 = __importDefault(require("./routes/invitation.routes"
 const publicInvitation_routes_1 = __importDefault(require("./routes/publicInvitation.routes"));
 const systemUserAssignment_routes_1 = require("./routes/systemUserAssignment.routes");
 const checkIn_routes_1 = __importStar(require("./routes/checkIn.routes"));
+const category_routes_1 = __importDefault(require("./routes/category.routes"));
+const template_routes_1 = __importDefault(require("./routes/template.routes"));
+const notification_routes_1 = __importDefault(require("./routes/notification.routes"));
+const auditLog_routes_1 = __importDefault(require("./routes/auditLog.routes"));
+const report_routes_1 = __importDefault(require("./routes/report.routes"));
+const ticketTier_routes_1 = require("./routes/ticketTier.routes");
+const payment_routes_1 = __importDefault(require("./routes/payment.routes"));
 const app = (0, express_1.default)();
 // Security and Middleware
 app.use((0, helmet_1.default)());
@@ -80,6 +87,15 @@ app.use('/api/v1/assignments', systemUserAssignment_routes_1.assignmentRoutes);
 app.use('/api/v1/users/me/assignments', systemUserAssignment_routes_1.myAssignmentRoutes);
 app.use('/api/v1/checkins', checkIn_routes_1.default);
 app.use('/api/v1/events/:eventId/checkins', checkIn_routes_1.eventCheckInRoutes);
+// Category, Template, Notification, AuditLog, Report, Ticketing & Payment Routes
+app.use('/api/v1/categories', category_routes_1.default);
+app.use('/api/v1/templates', template_routes_1.default);
+app.use('/api/v1/notifications', notification_routes_1.default);
+app.use('/api/v1/audit-logs', auditLog_routes_1.default);
+app.use('/api/v1/reports', report_routes_1.default);
+app.use('/api/v1/events/:eventId/tickets', ticketTier_routes_1.eventTicketTierRoutes);
+app.use('/api/v1/tickets', ticketTier_routes_1.ticketTierRoutes);
+app.use('/api/v1', payment_routes_1.default);
 // Global error handler should be the last middleware
 app.use(errorHandler_1.errorHandler);
 exports.default = app;

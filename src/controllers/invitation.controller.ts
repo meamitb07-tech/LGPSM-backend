@@ -1,14 +1,31 @@
 import { Request, Response } from 'express';
 import { invitationService } from '../services/invitation.service';
+import { DeliveryChannel } from '../models/Invitation';
 
 export const invitationController = {
   async sendInvitations(req: Request, res: Response) {
     try {
       const eventId = req.params.eventId as string;
-      const { inviteeIds, channel } = req.body;
-      const organizerId = (req as any).user.userId;
+      const { inviteeIds, channel, channels } = req.body;
+      const user = {
+        userId: (req as any).user?.userId,
+        role: (req as any).user?.role
+      };
 
-      const results = await invitationService.sendInvitations(eventId, organizerId, inviteeIds, channel);
+      let selectedChannel: DeliveryChannel = channel;
+      if (!selectedChannel && Array.isArray(channels)) {
+        const hasEmail = channels.includes('EMAIL');
+        const hasWhatsApp = channels.includes('WHATSAPP');
+        if (hasEmail && hasWhatsApp) {
+          selectedChannel = DeliveryChannel.BOTH;
+        } else if (hasWhatsApp) {
+          selectedChannel = DeliveryChannel.WHATSAPP;
+        } else if (hasEmail) {
+          selectedChannel = DeliveryChannel.EMAIL;
+        }
+      }
+
+      const results = await invitationService.sendInvitations(eventId, user, inviteeIds, selectedChannel || DeliveryChannel.EMAIL);
       return res.status(200).json({ success: true, message: 'Invitations processed successfully', results });
     } catch (error: any) {
       if (error.message === 'EVENT_NOT_FOUND') return res.status(404).json({ error: 'Not Found', message: 'Event not found or access denied' });
@@ -21,9 +38,12 @@ export const invitationController = {
     try {
       const eventId = req.params.eventId as string;
       const { invitationIds } = req.body;
-      const organizerId = (req as any).user.userId;
+      const user = {
+        userId: (req as any).user?.userId,
+        role: (req as any).user?.role
+      };
 
-      const results = await invitationService.resendInvitations(eventId, organizerId, invitationIds);
+      const results = await invitationService.resendInvitations(eventId, user, invitationIds);
       return res.status(200).json({ success: true, message: 'Invitations resent successfully', results });
     } catch (error: any) {
       if (error.message === 'EVENT_NOT_FOUND') return res.status(404).json({ error: 'Not Found', message: 'Event not found or access denied' });
@@ -35,11 +55,14 @@ export const invitationController = {
   async getInvitations(req: Request, res: Response) {
     try {
       const eventId = req.params.eventId as string;
-      const organizerId = (req as any).user.userId;
+      const user = {
+        userId: (req as any).user?.userId,
+        role: (req as any).user?.role
+      };
       const page = parseInt(req.query.page as string) || 1;
       const limit = parseInt(req.query.limit as string) || 20;
 
-      const data = await invitationService.getInvitations(eventId, organizerId, page, limit);
+      const data = await invitationService.getInvitations(eventId, user, page, limit);
       return res.status(200).json(data);
     } catch (error: any) {
       if (error.message === 'EVENT_NOT_FOUND') return res.status(404).json({ error: 'Not Found', message: 'Event not found or access denied' });
@@ -47,3 +70,4 @@ export const invitationController = {
     }
   }
 };
+

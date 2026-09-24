@@ -2,9 +2,11 @@ import mongoose from 'mongoose';
 import { Event } from '../models/Event';
 import { Invitee, InvitationStatus } from '../models/Invitee';
 import { Invitation, DeliveryChannel, InvitationDeliveryStatus } from '../models/Invitation';
+import { Role } from '../models/User';
 import { generateSecureToken, hashToken } from '../utils/invitation.util';
 import { generateQRCodeDataURL } from '../utils/qr.util';
 import { sendEmail } from '../utils/email.provider';
+import { whatsappService } from './whatsapp.service';
 import { env } from '../config/env';
 
 function buildFormalInvitationEmailHTML(params: {
@@ -130,8 +132,17 @@ function buildFormalInvitationEmailHTML(params: {
 }
 
 export const invitationService = {
-  async sendInvitations(eventId: string, organizerId: string, inviteeIds: string[], channel: DeliveryChannel) {
-    const event = await Event.findOne({ _id: eventId, organizerId });
+  async sendInvitations(eventId: string, userOrOrganizerId: any, inviteeIds: string[], channel: DeliveryChannel) {
+    const isUserObj = typeof userOrOrganizerId === 'object' && userOrOrganizerId !== null;
+    const organizerId = isUserObj ? userOrOrganizerId.userId : userOrOrganizerId;
+    const userRole = isUserObj ? userOrOrganizerId.role : undefined;
+
+    let event;
+    if (userRole === Role.ADMIN || userRole === 'ADMIN') {
+      event = await Event.findById(eventId);
+    } else {
+      event = await Event.findOne({ _id: eventId, organizerId });
+    }
     if (!event) throw new Error('EVENT_NOT_FOUND');
 
     // Filter unique inviteeIds to prevent duplicate processing in one request
@@ -148,48 +159,65 @@ export const invitationService = {
     const results = [];
     const baseUrl = process.env.INVITATION_BASE_URL || `${env.FRONTEND_URL}/invitation`;
 
+    const shouldSendEmail = channel === DeliveryChannel.EMAIL || channel === DeliveryChannel.BOTH;
+    const shouldSendWhatsApp = channel === DeliveryChannel.WHATSAPP || channel === DeliveryChannel.BOTH;
+
     for (const invitee of invitees) {
+      // Core Rule: Generate ONE secure token & ONE QR per event/invitee per send batch
       const rawToken = generateSecureToken();
       const tokenHash = hashToken(rawToken);
       const invitationUrl = `${baseUrl}/${rawToken}`;
       
-      const invitation = new Invitation({
-        eventId,
-        inviteeId: invitee._id,
-        channel,
-        status: InvitationDeliveryStatus.PENDING,
-        tokenHash
-      });
+      const qrDataUrl = await generateQRCodeDataURL(invitationUrl);
+      const base64Data = qrDataUrl.replace(/^data:image\/png;base64,/, '');
+      const qrBuffer = Buffer.from(base64Data, 'base64');
 
-      try {
-        if (channel === DeliveryChannel.EMAIL) {
+      let invitation = await Invitation.findOne({ eventId, inviteeId: invitee._id });
+      if (!invitation) {
+        invitation = new Invitation({
+          eventId,
+          inviteeId: invitee._id,
+          channel,
+          status: InvitationDeliveryStatus.PENDING,
+          tokenHash
+        });
+      } else {
+        invitation.channel = channel;
+        invitation.tokenHash = tokenHash;
+        invitation.status = InvitationDeliveryStatus.PENDING;
+      }
+
+      let emailSuccess = false;
+      let whatsappSuccess = false;
+      let emailErrReason = '';
+      let whatsappErrReason = '';
+
+      const eventDate = event.schedule?.start
+        ? new Date(event.schedule.start).toLocaleDateString('en-US', {
+            weekday: 'long',
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric',
+          })
+        : 'To Be Announced';
+
+      const eventTime = event.schedule?.start
+        ? new Date(event.schedule.start).toLocaleTimeString('en-US', {
+            hour: '2-digit',
+            minute: '2-digit',
+          })
+        : 'To Be Announced';
+
+      const venue = event.format === 'VIRTUAL'
+        ? 'Virtual Event'
+        : (event.location?.address || 'Venue details to be announced');
+
+      // 1. Process EMAIL if selected
+      if (shouldSendEmail) {
+        try {
           if (!invitee.email) throw new Error('MISSING_EMAIL');
-          
-          const qrDataUrl = await generateQRCodeDataURL(invitationUrl);
-          const base64Data = qrDataUrl.replace(/^data:image\/png;base64,/, '');
-          
-          const eventDate = event.schedule?.start
-            ? new Date(event.schedule.start).toLocaleDateString('en-US', {
-                weekday: 'long',
-                year: 'numeric',
-                month: 'long',
-                day: 'numeric',
-              })
-            : 'To Be Announced';
-
-          const eventTime = event.schedule?.start
-            ? new Date(event.schedule.start).toLocaleTimeString('en-US', {
-                hour: '2-digit',
-                minute: '2-digit',
-              })
-            : 'To Be Announced';
-
-          const venue = event.format === 'VIRTUAL'
-            ? 'Virtual Event'
-            : (event.location?.address || 'Venue details to be announced');
 
           const cid = `invitation-qr-${invitee._id}`;
-
           const htmlContent = buildFormalInvitationEmailHTML({
             eventTitle: event.title,
             inviteeName: invitee.name,
@@ -205,43 +233,106 @@ export const invitationService = {
           const attachments = [
             {
               filename: 'invitation-qr.png',
-              content: Buffer.from(base64Data, 'base64'),
+              content: qrBuffer,
               cid,
               contentType: 'image/png'
             }
           ];
 
           await sendEmail(invitee.email, `Invitation: ${event.title}`, htmlContent, attachments);
-          
-          invitation.status = InvitationDeliveryStatus.SENT;
-          invitation.sentAt = new Date();
-
-          // Only update Invitee state on successful send
-          invitee.qrTokenHash = tokenHash;
-          invitee.invitationStatus = InvitationStatus.SENT;
-        } else {
-          throw new Error('CHANNEL_NOT_SUPPORTED_YET');
+          emailSuccess = true;
+          invitation.emailStatus = InvitationDeliveryStatus.SENT;
+          invitation.emailFailureReason = undefined;
+        } catch (err: any) {
+          emailSuccess = false;
+          emailErrReason = err.message === 'PROVIDER_NOT_CONFIGURED' ? 'Email provider not configured' : err.message;
+          invitation.emailStatus = InvitationDeliveryStatus.FAILED;
+          invitation.emailFailureReason = emailErrReason;
         }
-      } catch (err: any) {
+      }
+
+      // 2. Process WHATSAPP if selected
+      if (shouldSendWhatsApp) {
+        try {
+          if (!invitee.mobile) throw new Error('MISSING_MOBILE');
+
+          const { messageId } = await whatsappService.sendInvitationWhatsApp({
+            recipientPhone: invitee.mobile,
+            qrBuffer,
+            inviteeName: invitee.name,
+            eventTitle: event.title,
+            eventDate,
+            eventTime,
+            venue
+          });
+
+          whatsappSuccess = true;
+          invitation.whatsappStatus = InvitationDeliveryStatus.SENT;
+          invitation.whatsappMessageId = messageId;
+          invitation.whatsappFailureReason = undefined;
+        } catch (err: any) {
+          whatsappSuccess = false;
+          whatsappErrReason = err.message;
+          invitation.whatsappStatus = InvitationDeliveryStatus.FAILED;
+          invitation.whatsappFailureReason = whatsappErrReason;
+        }
+      }
+
+      const anySuccess = (shouldSendEmail && emailSuccess) || (shouldSendWhatsApp && whatsappSuccess);
+
+      if (anySuccess) {
+        invitation.status = InvitationDeliveryStatus.SENT;
+        invitation.sentAt = new Date();
+        invitation.failureReason = undefined;
+
+        // Save active token and status on Invitee model
+        invitee.qrTokenHash = tokenHash;
+        invitee.invitationStatus = InvitationStatus.SENT;
+      } else {
         invitation.status = InvitationDeliveryStatus.FAILED;
-        invitation.failureReason = err.message === 'PROVIDER_NOT_CONFIGURED' ? 'Email provider not configured' : err.message;
-        
-        // If it's the first send attempt, mark invitee as FAILED
+        if (shouldSendEmail && shouldSendWhatsApp) {
+          const failures = [];
+          if (emailErrReason) failures.push(`Email: ${emailErrReason}`);
+          if (whatsappErrReason) failures.push(`WhatsApp: ${whatsappErrReason}`);
+          invitation.failureReason = failures.join(' | ') || 'Delivery failed';
+        } else if (shouldSendEmail) {
+          invitation.failureReason = emailErrReason || 'Email delivery failed';
+        } else {
+          invitation.failureReason = whatsappErrReason || 'WhatsApp delivery failed';
+        }
+
         if (invitee.invitationStatus === InvitationStatus.PENDING) {
           invitee.invitationStatus = InvitationStatus.FAILED;
         }
       }
-      
+
       await invitation.save();
       await invitee.save();
-      results.push({ inviteeId: invitee._id, status: invitation.status, failureReason: invitation.failureReason });
+
+      results.push({
+        inviteeId: invitee._id,
+        status: invitation.status,
+        emailStatus: invitation.emailStatus,
+        whatsappStatus: invitation.whatsappStatus,
+        whatsappMessageId: invitation.whatsappMessageId,
+        failureReason: invitation.failureReason
+      });
     }
 
     return results;
   },
 
-  async resendInvitations(eventId: string, organizerId: string, invitationIds: string[]) {
-    const event = await Event.findOne({ _id: eventId, organizerId });
+  async resendInvitations(eventId: string, userOrOrganizerId: any, invitationIds: string[]) {
+    const isUserObj = typeof userOrOrganizerId === 'object' && userOrOrganizerId !== null;
+    const organizerId = isUserObj ? userOrOrganizerId.userId : userOrOrganizerId;
+    const userRole = isUserObj ? userOrOrganizerId.role : undefined;
+
+    let event;
+    if (userRole === Role.ADMIN || userRole === 'ADMIN') {
+      event = await Event.findById(eventId);
+    } else {
+      event = await Event.findOne({ _id: eventId, organizerId });
+    }
     if (!event) throw new Error('EVENT_NOT_FOUND');
 
     const idsArray = Array.isArray(invitationIds) ? invitationIds : typeof invitationIds === "string" ? [invitationIds] : [];
@@ -267,12 +358,14 @@ export const invitationService = {
         continue;
       }
 
-      // Generate a fresh token for the resend
       const rawToken = generateSecureToken();
       const tokenHash = hashToken(rawToken);
       const invitationUrl = `${baseUrl}/${rawToken}`;
 
-      // Create a new delivery history record for the resend instead of overwriting the old one
+      const qrDataUrl = await generateQRCodeDataURL(invitationUrl);
+      const base64Data = qrDataUrl.replace(/^data:image\/png;base64,/, '');
+      const qrBuffer = Buffer.from(base64Data, 'base64');
+
       const resendInvitation = new Invitation({
         eventId,
         inviteeId: invitee._id,
@@ -281,35 +374,39 @@ export const invitationService = {
         tokenHash
       });
 
-      try {
-        if (invitation.channel === DeliveryChannel.EMAIL) {
+      const shouldSendEmail = invitation.channel === DeliveryChannel.EMAIL || invitation.channel === DeliveryChannel.BOTH;
+      const shouldSendWhatsApp = invitation.channel === DeliveryChannel.WHATSAPP || invitation.channel === DeliveryChannel.BOTH;
+
+      let emailSuccess = false;
+      let whatsappSuccess = false;
+      let emailErrReason = '';
+      let whatsappErrReason = '';
+
+      const eventDate = event.schedule?.start
+        ? new Date(event.schedule.start).toLocaleDateString('en-US', {
+            weekday: 'long',
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric',
+          })
+        : 'To Be Announced';
+
+      const eventTime = event.schedule?.start
+        ? new Date(event.schedule.start).toLocaleTimeString('en-US', {
+            hour: '2-digit',
+            minute: '2-digit',
+          })
+        : 'To Be Announced';
+
+      const venue = event.format === 'VIRTUAL'
+        ? 'Virtual Event'
+        : (event.location?.address || 'Venue details to be announced');
+
+      if (shouldSendEmail) {
+        try {
           if (!invitee.email) throw new Error('MISSING_EMAIL');
-          
-          const qrDataUrl = await generateQRCodeDataURL(invitationUrl);
-          const base64Data = qrDataUrl.replace(/^data:image\/png;base64,/, '');
-          
-          const eventDate = event.schedule?.start
-            ? new Date(event.schedule.start).toLocaleDateString('en-US', {
-                weekday: 'long',
-                year: 'numeric',
-                month: 'long',
-                day: 'numeric',
-              })
-            : 'To Be Announced';
-
-          const eventTime = event.schedule?.start
-            ? new Date(event.schedule.start).toLocaleTimeString('en-US', {
-                hour: '2-digit',
-                minute: '2-digit',
-              })
-            : 'To Be Announced';
-
-          const venue = event.format === 'VIRTUAL'
-            ? 'Virtual Event'
-            : (event.location?.address || 'Venue details to be announced');
 
           const cid = `invitation-qr-${invitee._id}`;
-
           const htmlContent = buildFormalInvitationEmailHTML({
             eventTitle: event.title,
             inviteeName: invitee.name,
@@ -325,39 +422,93 @@ export const invitationService = {
           const attachments = [
             {
               filename: 'invitation-qr.png',
-              content: Buffer.from(base64Data, 'base64'),
+              content: qrBuffer,
               cid,
               contentType: 'image/png'
             }
           ];
 
           await sendEmail(invitee.email, `Reminder: ${event.title}`, htmlContent, attachments);
-          
-          resendInvitation.status = InvitationDeliveryStatus.SENT;
-          resendInvitation.sentAt = new Date();
-
-          // Only overwrite the valid token in Invitee if the resend succeeds
-          invitee.qrTokenHash = tokenHash;
-          invitee.invitationStatus = InvitationStatus.SENT;
-        } else {
-          throw new Error('CHANNEL_NOT_SUPPORTED_YET');
+          emailSuccess = true;
+          resendInvitation.emailStatus = InvitationDeliveryStatus.SENT;
+          resendInvitation.emailFailureReason = undefined;
+        } catch (err: any) {
+          emailSuccess = false;
+          emailErrReason = err.message === 'PROVIDER_NOT_CONFIGURED' ? 'Email provider not configured' : err.message;
+          resendInvitation.emailStatus = InvitationDeliveryStatus.FAILED;
+          resendInvitation.emailFailureReason = emailErrReason;
         }
-      } catch (err: any) {
-        resendInvitation.status = InvitationDeliveryStatus.FAILED;
-        resendInvitation.failureReason = err.message === 'PROVIDER_NOT_CONFIGURED' ? 'Email provider not configured' : err.message;
-        // Do not overwrite invitee's existing qrTokenHash if resend fails
       }
-      
+
+      if (shouldSendWhatsApp) {
+        try {
+          if (!invitee.mobile) throw new Error('MISSING_MOBILE');
+
+          const { messageId } = await whatsappService.sendInvitationWhatsApp({
+            recipientPhone: invitee.mobile,
+            qrBuffer,
+            inviteeName: invitee.name,
+            eventTitle: event.title,
+            eventDate,
+            eventTime,
+            venue
+          });
+
+          whatsappSuccess = true;
+          resendInvitation.whatsappStatus = InvitationDeliveryStatus.SENT;
+          resendInvitation.whatsappMessageId = messageId;
+          resendInvitation.whatsappFailureReason = undefined;
+        } catch (err: any) {
+          whatsappSuccess = false;
+          whatsappErrReason = err.message;
+          resendInvitation.whatsappStatus = InvitationDeliveryStatus.FAILED;
+          resendInvitation.whatsappFailureReason = whatsappErrReason;
+        }
+      }
+
+      const anySuccess = (shouldSendEmail && emailSuccess) || (shouldSendWhatsApp && whatsappSuccess);
+
+      if (anySuccess) {
+        resendInvitation.status = InvitationDeliveryStatus.SENT;
+        resendInvitation.sentAt = new Date();
+        resendInvitation.failureReason = undefined;
+
+        invitee.qrTokenHash = tokenHash;
+        invitee.invitationStatus = InvitationStatus.SENT;
+      } else {
+        resendInvitation.status = InvitationDeliveryStatus.FAILED;
+        const failures = [];
+        if (shouldSendEmail && emailErrReason) failures.push(`Email: ${emailErrReason}`);
+        if (shouldSendWhatsApp && whatsappErrReason) failures.push(`WhatsApp: ${whatsappErrReason}`);
+        resendInvitation.failureReason = failures.join(' | ') || 'Delivery failed';
+      }
+
       await resendInvitation.save();
       await invitee.save();
-      results.push({ invitationId: resendInvitation._id, status: resendInvitation.status, failureReason: resendInvitation.failureReason });
+      results.push({
+        invitationId: resendInvitation._id,
+        status: resendInvitation.status,
+        emailStatus: resendInvitation.emailStatus,
+        whatsappStatus: resendInvitation.whatsappStatus,
+        whatsappMessageId: resendInvitation.whatsappMessageId,
+        failureReason: resendInvitation.failureReason
+      });
     }
 
     return results;
   },
 
-  async getInvitations(eventId: string, organizerId: string, page: number = 1, limit: number = 20) {
-    const event = await Event.findOne({ _id: eventId, organizerId });
+  async getInvitations(eventId: string, userOrOrganizerId: any, page: number = 1, limit: number = 20) {
+    const isUserObj = typeof userOrOrganizerId === 'object' && userOrOrganizerId !== null;
+    const organizerId = isUserObj ? userOrOrganizerId.userId : userOrOrganizerId;
+    const userRole = isUserObj ? userOrOrganizerId.role : undefined;
+
+    let event;
+    if (userRole === Role.ADMIN || userRole === 'ADMIN') {
+      event = await Event.findById(eventId);
+    } else {
+      event = await Event.findOne({ _id: eventId, organizerId });
+    }
     if (!event) throw new Error('EVENT_NOT_FOUND');
 
     const skip = (page - 1) * limit;
@@ -384,3 +535,4 @@ export const invitationService = {
     };
   }
 };
+

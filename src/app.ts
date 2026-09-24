@@ -14,6 +14,13 @@ import invitationRoutes from './routes/invitation.routes';
 import publicInvitationRoutes from './routes/publicInvitation.routes';
 import { eventAssignmentRoutes, assignmentRoutes, myAssignmentRoutes } from './routes/systemUserAssignment.routes';
 import checkInRoutes, { eventCheckInRoutes } from './routes/checkIn.routes';
+import categoryRoutes from './routes/category.routes';
+import templateRoutes from './routes/template.routes';
+import notificationRoutes from './routes/notification.routes';
+import auditLogRoutes from './routes/auditLog.routes';
+import reportRoutes from './routes/report.routes';
+import { eventTicketTierRoutes, ticketTierRoutes } from './routes/ticketTier.routes';
+import paymentRoutes from './routes/payment.routes';
 
 const app = express();
 
@@ -47,6 +54,16 @@ app.use('/api/v1/assignments', assignmentRoutes);
 app.use('/api/v1/users/me/assignments', myAssignmentRoutes);
 app.use('/api/v1/checkins', checkInRoutes);
 app.use('/api/v1/events/:eventId/checkins', eventCheckInRoutes);
+
+// Category, Template, Notification, AuditLog, Report, Ticketing & Payment Routes
+app.use('/api/v1/categories', categoryRoutes);
+app.use('/api/v1/templates', templateRoutes);
+app.use('/api/v1/notifications', notificationRoutes);
+app.use('/api/v1/audit-logs', auditLogRoutes);
+app.use('/api/v1/reports', reportRoutes);
+app.use('/api/v1/events/:eventId/tickets', eventTicketTierRoutes);
+app.use('/api/v1/tickets', ticketTierRoutes);
+app.use('/api/v1', paymentRoutes);
 
 // Global error handler should be the last middleware
 app.use(errorHandler);

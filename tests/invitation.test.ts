@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import { invitationService } from '../src/services/invitation.service';
+import { whatsappService } from '../src/services/whatsapp.service';
 import { Event } from '../src/models/Event';
 import { Invitee, InvitationStatus, RsvpStatus } from '../src/models/Invitee';
 import { Invitation, DeliveryChannel, InvitationDeliveryStatus } from '../src/models/Invitation';
@@ -52,13 +53,14 @@ describe('Invitation Service', () => {
       eventId,
       name: 'Test User',
       email: 'test@example.com',
+      mobile: '+919876543210',
       invitationStatus: InvitationStatus.PENDING,
       rsvpStatus: RsvpStatus.PENDING
     });
     inviteeId = invitee._id as mongoose.Types.ObjectId;
   });
 
-  it('should send invitations successfully and update statuses', async () => {
+  it('should send invitations successfully via EMAIL and update statuses', async () => {
     (sendEmail as jest.Mock).mockResolvedValue(true);
 
     const results = await invitationService.sendInvitations(eventId.toString(), organizerId.toString(), [inviteeId.toString()], DeliveryChannel.EMAIL);
@@ -72,6 +74,63 @@ describe('Invitation Service', () => {
     const invitation = await Invitation.findOne({ inviteeId });
     expect(invitation?.status).toBe(InvitationDeliveryStatus.SENT);
     expect(invitation?.tokenHash).toEqual(invitee?.qrTokenHash);
+  });
+
+  it('should send invitations via BOTH EMAIL and WHATSAPP using the SAME invitation token', async () => {
+    (sendEmail as jest.Mock).mockResolvedValue(true);
+    const mockSendWA = jest.spyOn(whatsappService, 'sendInvitationWhatsApp').mockResolvedValue({
+      messageId: 'wamid.HBgLMTIzNDU2Nzg5MA==',
+      mediaId: 'media_id_12345'
+    });
+
+    const results = await invitationService.sendInvitations(
+      eventId.toString(),
+      organizerId.toString(),
+      [inviteeId.toString()],
+      DeliveryChannel.BOTH
+    );
+
+    expect(results[0].status).toBe(InvitationDeliveryStatus.SENT);
+    expect(results[0].whatsappMessageId).toBe('wamid.HBgLMTIzNDU2Nzg5MA==');
+
+    const invitee = await Invitee.findById(inviteeId);
+    expect(invitee?.invitationStatus).toBe(InvitationStatus.SENT);
+    const activeTokenHash = invitee?.qrTokenHash;
+
+    const invitation = await Invitation.findOne({ inviteeId });
+    expect(invitation?.tokenHash).toBe(activeTokenHash);
+    expect(invitation?.emailStatus).toBe(InvitationDeliveryStatus.SENT);
+    expect(invitation?.whatsappStatus).toBe(InvitationDeliveryStatus.SENT);
+
+    // Verify WhatsApp service received the same QR buffer and parameters
+    expect(mockSendWA).toHaveBeenCalledTimes(1);
+    expect(mockSendWA.mock.calls[0][0].recipientPhone).toBe('+919876543210');
+    expect(mockSendWA.mock.calls[0][0].inviteeName).toBe('Test User');
+    expect(mockSendWA.mock.calls[0][0].eventTitle).toBe('Test Event');
+
+    mockSendWA.mockRestore();
+  });
+
+  it('should handle WhatsApp provider failure cleanly without marking full success if both fail', async () => {
+    (sendEmail as jest.Mock).mockRejectedValue(new Error('SMTP_ERROR'));
+    const mockSendWA = jest.spyOn(whatsappService, 'sendInvitationWhatsApp').mockRejectedValue(new Error('WHATSAPP_MEDIA_UPLOAD_FAILED: Invalid Token'));
+
+    const results = await invitationService.sendInvitations(
+      eventId.toString(),
+      organizerId.toString(),
+      [inviteeId.toString()],
+      DeliveryChannel.BOTH
+    );
+
+    expect(results[0].status).toBe(InvitationDeliveryStatus.FAILED);
+    expect(results[0].emailStatus).toBe(InvitationDeliveryStatus.FAILED);
+    expect(results[0].whatsappStatus).toBe(InvitationDeliveryStatus.FAILED);
+
+    const invitation = await Invitation.findOne({ inviteeId });
+    expect(invitation?.status).toBe(InvitationDeliveryStatus.FAILED);
+    expect(invitation?.failureReason).toContain('WhatsApp: WHATSAPP_MEDIA_UPLOAD_FAILED: Invalid Token');
+
+    mockSendWA.mockRestore();
   });
 
   it('should not update Invitee token if provider fails', async () => {
@@ -113,11 +172,17 @@ describe('Invitation Service', () => {
     expect(history[1].status).toBe(InvitationDeliveryStatus.FAILED);
   });
   
-  it('should strictly verify event ownership', async () => {
+  it('should strictly verify event ownership for normal organizers but allow ADMIN', async () => {
     const wrongOrganizer = new mongoose.Types.ObjectId().toString();
     await expect(
       invitationService.sendInvitations(eventId.toString(), wrongOrganizer, [inviteeId.toString()], DeliveryChannel.EMAIL)
     ).rejects.toThrow('EVENT_NOT_FOUND');
+
+    (sendEmail as jest.Mock).mockResolvedValue(true);
+    // ADMIN role user object can access and send
+    const adminUser = { userId: wrongOrganizer, role: 'ADMIN' };
+    const results = await invitationService.sendInvitations(eventId.toString(), adminUser, [inviteeId.toString()], DeliveryChannel.EMAIL);
+    expect(results[0].status).toBe(InvitationDeliveryStatus.SENT);
   });
 
   it('should generate inline CID QR attachment and be scanner compatible with checkInService', async () => {
@@ -153,3 +218,4 @@ describe('Invitation Service', () => {
     expect(invitation?.tokenHash).toEqual(invitee?.qrTokenHash);
   });
 });
+

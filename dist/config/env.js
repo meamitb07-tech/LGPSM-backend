@@ -23,6 +23,12 @@ const envSchema = zod_1.z.object({
     AWS_ACCESS_KEY_ID: zod_1.z.string().optional(),
     AWS_SECRET_ACCESS_KEY: zod_1.z.string().optional(),
     AWS_CLOUDFRONT_DOMAIN: zod_1.z.string().optional(),
+    WHATSAPP_ACCESS_TOKEN: zod_1.z.string().optional(),
+    WHATSAPP_PHONE_NUMBER_ID: zod_1.z.string().default('1397912796731568'),
+    WHATSAPP_BUSINESS_ACCOUNT_ID: zod_1.z.string().default('1366427858610266'),
+    WHATSAPP_API_VERSION: zod_1.z.string().default('v25.0'),
+    WHATSAPP_INVITATION_TEMPLATE: zod_1.z.string().default('lgpsm_event_invitation'),
+    WHATSAPP_TEMPLATE_LANGUAGE: zod_1.z.string().default('en_US'),
 });
 const _env = envSchema.safeParse(process.env);
 if (!_env.success) {

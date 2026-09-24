@@ -2,13 +2,31 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.invitationController = void 0;
 const invitation_service_1 = require("../services/invitation.service");
+const Invitation_1 = require("../models/Invitation");
 exports.invitationController = {
     async sendInvitations(req, res) {
         try {
             const eventId = req.params.eventId;
-            const { inviteeIds, channel } = req.body;
-            const organizerId = req.user.userId;
-            const results = await invitation_service_1.invitationService.sendInvitations(eventId, organizerId, inviteeIds, channel);
+            const { inviteeIds, channel, channels } = req.body;
+            const user = {
+                userId: req.user?.userId,
+                role: req.user?.role
+            };
+            let selectedChannel = channel;
+            if (!selectedChannel && Array.isArray(channels)) {
+                const hasEmail = channels.includes('EMAIL');
+                const hasWhatsApp = channels.includes('WHATSAPP');
+                if (hasEmail && hasWhatsApp) {
+                    selectedChannel = Invitation_1.DeliveryChannel.BOTH;
+                }
+                else if (hasWhatsApp) {
+                    selectedChannel = Invitation_1.DeliveryChannel.WHATSAPP;
+                }
+                else if (hasEmail) {
+                    selectedChannel = Invitation_1.DeliveryChannel.EMAIL;
+                }
+            }
+            const results = await invitation_service_1.invitationService.sendInvitations(eventId, user, inviteeIds, selectedChannel || Invitation_1.DeliveryChannel.EMAIL);
             return res.status(200).json({ success: true, message: 'Invitations processed successfully', results });
         }
         catch (error) {
@@ -23,8 +41,11 @@ exports.invitationController = {
         try {
             const eventId = req.params.eventId;
             const { invitationIds } = req.body;
-            const organizerId = req.user.userId;
-            const results = await invitation_service_1.invitationService.resendInvitations(eventId, organizerId, invitationIds);
+            const user = {
+                userId: req.user?.userId,
+                role: req.user?.role
+            };
+            const results = await invitation_service_1.invitationService.resendInvitations(eventId, user, invitationIds);
             return res.status(200).json({ success: true, message: 'Invitations resent successfully', results });
         }
         catch (error) {
@@ -38,10 +59,13 @@ exports.invitationController = {
     async getInvitations(req, res) {
         try {
             const eventId = req.params.eventId;
-            const organizerId = req.user.userId;
+            const user = {
+                userId: req.user?.userId,
+                role: req.user?.role
+            };
             const page = parseInt(req.query.page) || 1;
             const limit = parseInt(req.query.limit) || 20;
-            const data = await invitation_service_1.invitationService.getInvitations(eventId, organizerId, page, limit);
+            const data = await invitation_service_1.invitationService.getInvitations(eventId, user, page, limit);
             return res.status(200).json(data);
         }
         catch (error) {

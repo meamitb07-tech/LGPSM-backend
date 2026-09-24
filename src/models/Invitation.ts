@@ -3,7 +3,8 @@ import mongoose, { Document, Schema } from 'mongoose';
 export enum DeliveryChannel {
   EMAIL = 'EMAIL',
   SMS = 'SMS',
-  WHATSAPP = 'WHATSAPP'
+  WHATSAPP = 'WHATSAPP',
+  BOTH = 'BOTH'
 }
 
 export enum InvitationDeliveryStatus {
@@ -20,6 +21,11 @@ export interface IInvitation extends Document {
   sentAt?: Date;
   failureReason?: string;
   tokenHash: string;
+  emailStatus?: InvitationDeliveryStatus;
+  emailFailureReason?: string;
+  whatsappStatus?: InvitationDeliveryStatus;
+  whatsappMessageId?: string;
+  whatsappFailureReason?: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -41,7 +47,12 @@ const InvitationSchema: Schema = new Schema(
     },
     sentAt: { type: Date },
     failureReason: { type: String },
-    tokenHash: { type: String, required: true }
+    tokenHash: { type: String, required: true },
+    emailStatus: { type: String, enum: Object.values(InvitationDeliveryStatus) },
+    emailFailureReason: { type: String },
+    whatsappStatus: { type: String, enum: Object.values(InvitationDeliveryStatus) },
+    whatsappMessageId: { type: String },
+    whatsappFailureReason: { type: String }
   },
   {
     timestamps: true

@@ -37,6 +37,11 @@ exports.Template = void 0;
 const mongoose_1 = __importStar(require("mongoose"));
 const TemplateSchema = new mongoose_1.Schema({
     name: { type: String, required: true },
+    categoryId: { type: mongoose_1.Schema.Types.ObjectId, ref: 'Category' },
+    subcategoryId: { type: mongoose_1.Schema.Types.ObjectId, ref: 'Category' },
+    previewImageKey: { type: String },
+    templateData: { type: mongoose_1.Schema.Types.Mixed, default: {} },
+    isSystemTemplate: { type: Boolean, default: true },
     isActive: { type: Boolean, default: true }
 }, {
     timestamps: true

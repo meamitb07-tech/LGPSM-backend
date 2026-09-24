@@ -1,0 +1,32 @@
+import { Request, Response } from 'express';
+import { reportService } from '../services/report.service';
+
+export const reportController = {
+  async getDashboardStats(req: Request, res: Response) {
+    try {
+      const user = {
+        userId: (req as any).user.userId,
+        role: (req as any).user.role
+      };
+      const data = await reportService.getDashboardStats(user);
+      return res.status(200).json({ success: true, data });
+    } catch (error: any) {
+      return res.status(500).json({ error: 'Internal Server Error', message: error.message });
+    }
+  },
+
+  async getEventReport(req: Request, res: Response) {
+    try {
+      const eventId = req.params.eventId as string;
+      const user = {
+        userId: (req as any).user.userId,
+        role: (req as any).user.role
+      };
+      const data = await reportService.getEventReport(eventId, user);
+      return res.status(200).json({ success: true, data });
+    } catch (error: any) {
+      if (error.message === 'EVENT_NOT_FOUND') return res.status(404).json({ error: 'Not Found', message: 'Event not found or access denied' });
+      return res.status(500).json({ error: 'Internal Server Error', message: error.message });
+    }
+  }
+};

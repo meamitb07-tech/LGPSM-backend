@@ -35,8 +35,14 @@ var __importStar = (this && this.__importStar) || (function () {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.Category = void 0;
 const mongoose_1 = __importStar(require("mongoose"));
-const CategorySchema = new mongoose_1.Schema({
+const SubcategorySchema = new mongoose_1.Schema({
     name: { type: String, required: true },
+    isActive: { type: Boolean, default: true }
+}, { timestamps: true });
+const CategorySchema = new mongoose_1.Schema({
+    name: { type: String, required: true, unique: true },
+    description: { type: String },
+    subcategories: { type: [SubcategorySchema], default: [] },
     isActive: { type: Boolean, default: true }
 }, {
     timestamps: true

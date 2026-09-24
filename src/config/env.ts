@@ -19,6 +19,12 @@ const envSchema = z.object({
   AWS_ACCESS_KEY_ID: z.string().optional(),
   AWS_SECRET_ACCESS_KEY: z.string().optional(),
   AWS_CLOUDFRONT_DOMAIN: z.string().optional(),
+  WHATSAPP_ACCESS_TOKEN: z.string().optional(),
+  WHATSAPP_PHONE_NUMBER_ID: z.string().default('1397912796731568'),
+  WHATSAPP_BUSINESS_ACCOUNT_ID: z.string().default('1366427858610266'),
+  WHATSAPP_API_VERSION: z.string().default('v25.0'),
+  WHATSAPP_INVITATION_TEMPLATE: z.string().default('lgpsm_event_invitation'),
+  WHATSAPP_TEMPLATE_LANGUAGE: z.string().default('en_US'),
 });
 
 const _env = envSchema.safeParse(process.env);

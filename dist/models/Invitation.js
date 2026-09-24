@@ -40,6 +40,7 @@ var DeliveryChannel;
     DeliveryChannel["EMAIL"] = "EMAIL";
     DeliveryChannel["SMS"] = "SMS";
     DeliveryChannel["WHATSAPP"] = "WHATSAPP";
+    DeliveryChannel["BOTH"] = "BOTH";
 })(DeliveryChannel || (exports.DeliveryChannel = DeliveryChannel = {}));
 var InvitationDeliveryStatus;
 (function (InvitationDeliveryStatus) {
@@ -63,7 +64,12 @@ const InvitationSchema = new mongoose_1.Schema({
     },
     sentAt: { type: Date },
     failureReason: { type: String },
-    tokenHash: { type: String, required: true }
+    tokenHash: { type: String, required: true },
+    emailStatus: { type: String, enum: Object.values(InvitationDeliveryStatus) },
+    emailFailureReason: { type: String },
+    whatsappStatus: { type: String, enum: Object.values(InvitationDeliveryStatus) },
+    whatsappMessageId: { type: String },
+    whatsappFailureReason: { type: String }
 }, {
     timestamps: true
 });
