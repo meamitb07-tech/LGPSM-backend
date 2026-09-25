@@ -12,6 +12,31 @@ const TicketTier_1 = require("../models/TicketTier");
 const Event_1 = require("../models/Event");
 const Order_1 = require("../models/Order");
 const Payment_1 = require("../models/Payment");
+// Payments fail closed: nothing is marked PAID unless Razorpay is configured and the signature verifies.
+function getRazorpayCredentials() {
+    const keyId = process.env.RAZORPAY_KEY_ID;
+    const keySecret = process.env.RAZORPAY_KEY_SECRET;
+    if (!keyId || !keySecret) {
+        throw new Error('PAYMENT_PROVIDER_NOT_CONFIGURED');
+    }
+    return { keyId, keySecret };
+}
+async function createRazorpayOrder(amountInPaise, currency, receipt) {
+    const { keyId, keySecret } = getRazorpayCredentials();
+    const response = await fetch('https://api.razorpay.com/v1/orders', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Basic ${Buffer.from(`${keyId}:${keySecret}`).toString('base64')}`
+        },
+        body: JSON.stringify({ amount: amountInPaise, currency, receipt })
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || !data?.id) {
+        throw new Error('PAYMENT_PROVIDER_ERROR');
+    }
+    return data;
+}
 exports.paymentService = {
     async createTicketOrder(userId, eventId, ticketTierId, quantity) {
         const event = await Event_1.Event.findById(eventId);
@@ -24,14 +49,19 @@ exports.paymentService = {
             throw new Error('TIER_CAPACITY_EXCEEDED');
         }
         const totalAmount = tier.price * quantity;
-        const providerOrderId = `order_rzp_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+        const currency = tier.currency || 'INR';
+        // Order must exist at the provider before we record anything locally
+        getRazorpayCredentials();
+        const receipt = `rcpt_${Date.now()}`;
+        const razorpayOrder = await createRazorpayOrder(Math.round(totalAmount * 100), currency, receipt);
+        const providerOrderId = razorpayOrder.id;
         const order = await order_repository_1.orderRepository.create({
             userId: userId,
             eventId: eventId,
             ticketTierId: ticketTierId,
             quantity,
             amount: totalAmount,
-            currency: tier.currency || 'INR',
+            currency,
             providerOrderId,
             status: Order_1.OrderStatus.PENDING
         });
@@ -44,7 +74,7 @@ exports.paymentService = {
             amountBase: totalAmount,
             taxAmount: 0,
             totalAmount,
-            currency: tier.currency || 'INR',
+            currency,
             status: Payment_1.PaymentStatus.CREATED,
             signatureVerified: false
         });
@@ -53,20 +83,20 @@ exports.paymentService = {
             payment,
             razorpayOrder: {
                 id: providerOrderId,
-                entity: 'order',
-                amount: totalAmount * 100, // amount in paise
-                currency: tier.currency || 'INR',
-                receipt: order._id.toString()
+                entity: razorpayOrder.entity,
+                amount: razorpayOrder.amount,
+                currency: razorpayOrder.currency,
+                receipt: razorpayOrder.receipt
             }
         };
     },
     async verifyPayment(userId, providerOrderId, providerPaymentId, signature) {
+        const { keySecret } = getRazorpayCredentials();
         const payment = await payment_repository_1.paymentRepository.findByProviderOrderId(providerOrderId);
-        if (!payment)
+        if (!payment || payment.userId.toString() !== userId)
             throw new Error('PAYMENT_NOT_FOUND');
-        let isValid = true;
-        const keySecret = process.env.RAZORPAY_KEY_SECRET;
-        if (keySecret && signature) {
+        let isValid = false;
+        if (signature) {
             const generatedSignature = crypto_1.default
                 .createHmac('sha256', keySecret)
                 .update(`${providerOrderId}|${providerPaymentId}`)
@@ -105,7 +135,13 @@ exports.paymentService = {
     },
     async handleWebhook(eventBody, signature) {
         const webhookSecret = process.env.RAZORPAY_WEBHOOK_SECRET;
-        if (webhookSecret && signature) {
+        if (!webhookSecret) {
+            throw new Error('PAYMENT_PROVIDER_NOT_CONFIGURED');
+        }
+        if (!signature) {
+            throw new Error('INVALID_WEBHOOK_SIGNATURE');
+        }
+        {
             const expectedSignature = crypto_1.default
                 .createHmac('sha256', webhookSecret)
                 .update(JSON.stringify(eventBody))
@@ -157,13 +193,13 @@ exports.paymentService = {
     },
     async getOrderById(orderId, userId) {
         const order = await order_repository_1.orderRepository.findById(orderId);
-        if (!order)
+        if (!order || order.userId.toString() !== userId)
             throw new Error('ORDER_NOT_FOUND');
         return order;
     },
     async getInvoiceById(invoiceId, userId) {
         const invoice = await invoice_repository_1.invoiceRepository.findById(invoiceId);
-        if (!invoice)
+        if (!invoice || invoice.userId.toString() !== userId)
             throw new Error('INVOICE_NOT_FOUND');
         return invoice;
     }

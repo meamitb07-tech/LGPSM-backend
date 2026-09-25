@@ -6,6 +6,7 @@ const user_repository_1 = require("../repositories/user.repository");
 const token_repository_1 = require("../repositories/token.repository");
 const password_1 = require("../utils/password");
 const token_1 = require("../utils/token");
+const email_provider_1 = require("../utils/email.provider");
 const User_1 = require("../models/User");
 const env_1 = require("../config/env");
 const googleClient = new google_auth_library_1.OAuth2Client(env_1.env.GOOGLE_CLIENT_ID);
@@ -16,14 +17,10 @@ exports.authService = {
             throw { statusCode: 400, message: 'Email already in use' };
         }
         const hashedPassword = await (0, password_1.hashPassword)(data.password);
-        // Determine assigned role from input or fallback checks
+        // Role comes only from the explicit (validated) input; never inferred from name/email
         let assignedRole = User_1.Role.ORGANIZER;
         if (data.role && Object.values(User_1.Role).includes(data.role)) {
             assignedRole = data.role;
-        }
-        else if ((data.email && data.email.toLowerCase().includes('admin')) ||
-            (data.fullName && data.fullName.toLowerCase().includes('admin'))) {
-            assignedRole = User_1.Role.ADMIN;
         }
         const user = await user_repository_1.userRepository.create({
             fullName: data.fullName,
@@ -47,13 +44,10 @@ exports.authService = {
         if (!isMatch) {
             throw { statusCode: 401, message: 'Invalid credentials or inactive account' };
         }
-        // If login specifies ADMIN role or user email/fullName contains 'admin', ensure user has ADMIN role
-        if ((data.role === User_1.Role.ADMIN ||
-            (user.email && user.email.toLowerCase().includes('admin')) ||
-            (user.fullName && user.fullName.toLowerCase().includes('admin'))) &&
-            user.role !== User_1.Role.ADMIN) {
-            user.role = User_1.Role.ADMIN;
-            await user.save();
+        // The login portal (Admin / Organizer / System User) must match the stored role.
+        // A login request can never change a user's role.
+        if (data.role && data.role !== user.role) {
+            throw { statusCode: 403, message: `This account is not registered as ${String(data.role).replace('_', ' ').toLowerCase()}. Please use the correct login option.` };
         }
         const userId = user._id.toString();
         const accessToken = (0, token_1.generateAccessToken)(userId, user.role);
@@ -123,11 +117,23 @@ exports.authService = {
         const user = await user_repository_1.userRepository.findByEmail(email);
         if (!user)
             return;
-        const resetToken = (0, token_1.generateAccessToken)(user._id.toString(), user.role);
-        console.log(`[DEV ONLY] Password reset requested for ${email}. Token: ${resetToken}`);
+        const resetToken = (0, token_1.generatePasswordResetToken)(user._id.toString(), user.role);
+        const resetUrl = `${env_1.env.FRONTEND_URL}/forgot-password?token=${encodeURIComponent(resetToken)}`;
+        try {
+            await (0, email_provider_1.sendEmail)(user.email, 'Reset your LGPSM password', `<p>Hello ${user.fullName},</p><p>Use the link below to reset your password. It expires in 15 minutes.</p><p><a href="${resetUrl}">Reset password</a></p><p>If you did not request this, you can ignore this email.</p>`);
+        }
+        catch (err) {
+            // Without a working mail provider the link is only surfaced to developers
+            if (env_1.env.NODE_ENV !== 'production') {
+                console.log(`[DEV ONLY] Password reset link for ${email}: ${resetUrl}`);
+            }
+            else {
+                console.error('Password reset email could not be sent:', err.message);
+            }
+        }
     },
     async resetPassword(token, newPassword) {
-        const payload = (0, token_1.verifyAccessToken)(token);
+        const payload = (0, token_1.verifyPasswordResetToken)(token);
         const user = await user_repository_1.userRepository.findById(payload.userId);
         if (!user) {
             throw { statusCode: 400, message: 'Invalid token' };

@@ -36,7 +36,7 @@ export const inviteeController = {
         search: req.query.search as string
       };
 
-      const result = await inviteeService.getInvitees(eventId, organizerId, options);
+      const result = await inviteeService.getInvitees(eventId, organizerId, options, (req as any).user.role);
       
       res.status(200).json({
         success: true,

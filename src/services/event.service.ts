@@ -65,12 +65,18 @@ export class EventService {
     return await eventRepository.create(dataToCreate);
   }
 
-  async getEventsByOrganizer(organizerId: string, filter: EventFilter, pagination: Pagination) {
+  async getEventsByOrganizer(organizerId: string, filter: EventFilter & { organizerId?: string }, pagination: Pagination, role?: Role) {
+    // Admins can review every organizer's events (read-only); organizers only see their own
+    if (role === Role.ADMIN) {
+      return await eventRepository.findAll(filter, pagination);
+    }
     return await eventRepository.findByOrganizer(organizerId, filter, pagination);
   }
 
-  async getEventById(eventId: string, organizerId: string): Promise<IEvent> {
-    const event = await eventRepository.findByIdAndOrganizer(eventId, organizerId);
+  async getEventById(eventId: string, organizerId: string, role?: Role): Promise<IEvent> {
+    const event = role === Role.ADMIN
+      ? await Event.findById(eventId).populate('organizerId', 'fullName email')
+      : await eventRepository.findByIdAndOrganizer(eventId, organizerId);
     if (!event) {
       throw new Error('EVENT_NOT_FOUND');
     }

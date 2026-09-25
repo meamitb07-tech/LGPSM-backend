@@ -9,17 +9,19 @@ const User_1 = require("../models/User");
 const session_validator_1 = require("../validators/session.validator");
 const validate = (schema) => (req, res, next) => {
     try {
-        schema.parse({ body: req.body });
+        const parsed = schema.parse({ body: req.body });
+        req.body = { ...req.body, ...parsed.body };
         next();
     }
     catch (err) {
-        res.status(400).json({ error: 'Validation Error', message: 'Invalid input data', details: err.errors });
+        res.status(400).json({ success: false, error: 'Validation Error', message: err.issues?.[0]?.message || 'Invalid input data', details: err.issues ?? err.errors });
     }
 };
 exports.eventSessionRoutes = (0, express_1.Router)({ mergeParams: true });
 exports.eventSessionRoutes.use(authenticate_1.authenticate);
 exports.eventSessionRoutes.post('/', (0, authorizeRoles_1.authorizeRoles)(User_1.Role.ADMIN, User_1.Role.ORGANIZER), validate(session_validator_1.createSessionSchema), session_controller_1.sessionController.createSession);
-exports.eventSessionRoutes.get('/', (0, authorizeRoles_1.authorizeRoles)(User_1.Role.ADMIN, User_1.Role.ORGANIZER), session_controller_1.sessionController.getSessions);
+// SYSTEM_USER may read the sessions of events they are assigned to (for check-in)
+exports.eventSessionRoutes.get('/', (0, authorizeRoles_1.authorizeRoles)(User_1.Role.ADMIN, User_1.Role.ORGANIZER, User_1.Role.SYSTEM_USER), session_controller_1.sessionController.getSessions);
 exports.sessionRoutes = (0, express_1.Router)();
 exports.sessionRoutes.use(authenticate_1.authenticate);
 exports.sessionRoutes.get('/:sessionId', (0, authorizeRoles_1.authorizeRoles)(User_1.Role.ADMIN, User_1.Role.ORGANIZER), session_controller_1.sessionController.getSessionById);

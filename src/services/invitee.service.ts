@@ -36,8 +36,10 @@ export const inviteeService = {
     rsvpStatus?: string;
     invitationStatus?: string;
     search?: string;
-  } = {}) {
-    const event = await Event.findOne({ _id: eventId, organizerId });
+  } = {}, role?: string) {
+    const event = role === 'ADMIN'
+      ? await Event.findById(eventId)
+      : await Event.findOne({ _id: eventId, organizerId });
     if (!event) {
       throw new Error('EVENT_NOT_FOUND');
     }

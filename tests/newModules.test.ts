@@ -155,7 +155,23 @@ describe('New Modules (Category, Template, Notification, AuditLog, Report, Ticke
     expect(tierRes.status).toBe(201);
     const tierId = tierRes.body.data._id;
 
-    // 2. Create Ticket Order
+    // 2. Without Razorpay credentials the order must be refused, never faked
+    delete process.env.RAZORPAY_KEY_ID;
+    delete process.env.RAZORPAY_KEY_SECRET;
+    const unconfiguredRes = await request
+      .post('/api/v1/payments/order')
+      .set('Authorization', `Bearer ${organizerToken}`)
+      .send({ eventId, ticketTierId: tierId, quantity: 2 });
+    expect(unconfiguredRes.status).toBe(503);
+
+    // 3. With credentials, the order is created at the provider (provider call is stubbed here)
+    process.env.RAZORPAY_KEY_ID = 'rzp_test_key';
+    process.env.RAZORPAY_KEY_SECRET = 'rzp_test_secret';
+    const fetchSpy = jest.spyOn(global, 'fetch').mockResolvedValue({
+      ok: true,
+      json: async () => ({ id: 'order_provider_123', entity: 'order', amount: 300000, currency: 'INR', receipt: 'rcpt' })
+    } as any);
+
     const orderRes = await request
       .post('/api/v1/payments/order')
       .set('Authorization', `Bearer ${organizerToken}`)
@@ -164,22 +180,37 @@ describe('New Modules (Category, Template, Notification, AuditLog, Report, Ticke
         ticketTierId: tierId,
         quantity: 2
       });
+    fetchSpy.mockRestore();
 
     expect(orderRes.status).toBe(201);
     expect(orderRes.body.data.order.amount).toBe(3000);
     const providerOrderId = orderRes.body.data.payment.providerOrderId;
+    expect(providerOrderId).toBe('order_provider_123');
 
-    // 3. Verify Payment & Generate Invoice
+    // 4. Verification without a valid signature must fail
+    const unsignedRes = await request
+      .post('/api/v1/payments/verify')
+      .set('Authorization', `Bearer ${organizerToken}`)
+      .send({ providerOrderId, providerPaymentId: 'pay_rzp_unsigned' });
+    expect(unsignedRes.status).toBe(400);
+
+    // 5. Verify Payment with a correct signature & Generate Invoice
+    const crypto = await import('crypto');
+    const signature = crypto.createHmac('sha256', 'rzp_test_secret').update(`${providerOrderId}|pay_rzp_signed`).digest('hex');
     const verifyRes = await request
       .post('/api/v1/payments/verify')
       .set('Authorization', `Bearer ${organizerToken}`)
       .send({
         providerOrderId,
-        providerPaymentId: 'pay_rzp_mock123'
+        providerPaymentId: 'pay_rzp_signed',
+        signature
       });
 
     expect(verifyRes.status).toBe(200);
     expect(verifyRes.body.data.order.status).toBe('PAID');
     expect(verifyRes.body.data.invoice.invoiceNumber).toContain('INV-');
+
+    delete process.env.RAZORPAY_KEY_ID;
+    delete process.env.RAZORPAY_KEY_SECRET;
   });
 });

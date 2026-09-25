@@ -3,6 +3,7 @@ import { Event } from '../models/Event';
 import { Invitee, RsvpStatus, InvitationStatus } from '../models/Invitee';
 import { CheckIn } from '../models/CheckIn';
 import { Session } from '../models/Session';
+import { SystemUserAssignment } from '../models/SystemUserAssignment';
 
 export const reportService = {
   async getDashboardStats(user: { userId: string; role: string }) {
@@ -16,7 +17,7 @@ export const reportService = {
     const eventIds = events.map(e => e._id);
 
     const totalInvitees = await Invitee.countDocuments({ eventId: { $in: eventIds } });
-    const totalCheckIns = await CheckIn.countDocuments({ eventId: { $in: eventIds }, status: 'CHECKED_IN' });
+    const totalCheckIns = await CheckIn.countDocuments({ eventId: { $in: eventIds }});
 
     const rsvpStats = await Invitee.aggregate([
       { $match: { eventId: { $in: eventIds } } },
@@ -56,7 +57,7 @@ export const reportService = {
     const eventObjId = new mongoose.Types.ObjectId(eventId);
 
     const totalInvitees = await Invitee.countDocuments({ eventId: eventObjId });
-    const totalCheckIns = await CheckIn.countDocuments({ eventId: eventObjId, status: 'CHECKED_IN' });
+    const totalCheckIns = await CheckIn.countDocuments({ eventId: eventObjId});
 
     // RSVP breakdown
     const rsvpStats = await Invitee.aggregate([
@@ -86,8 +87,8 @@ export const reportService = {
 
     // Check-in Method breakdown (QR vs MANUAL)
     const methodStats = await CheckIn.aggregate([
-      { $match: { eventId: eventObjId, status: 'CHECKED_IN' } },
-      { $group: { _id: '$method', count: { $sum: 1 } } }
+      { $match: { eventId: eventObjId} },
+      { $group: { _id: '$checkInMethod', count: { $sum: 1 } } }
     ]);
 
     const checkInMethods = { QR: 0, MANUAL: 0 };
@@ -97,21 +98,48 @@ export const reportService = {
       }
     });
 
+    // Distinct attendees (an invitee checked into several sessions counts once)
+    const attendeeIds = await CheckIn.distinct('inviteeId', { eventId: eventObjId });
+    const uniqueAttendees = attendeeIds.length;
+
+    // System users assigned to this event
+    const assignments = await SystemUserAssignment.find({ eventId: eventObjId }, 'sessionIds').lean();
+    const totalSystemUsers = assignments.length;
+
     // Sessions breakdown
-    const sessions = await Session.find({ eventId: eventObjId });
+    const sessions = await Session.find({ eventId: eventObjId }).sort({ 'schedule.start': 1 });
     const sessionReports = await Promise.all(
       sessions.map(async (sess) => {
-        const count = await CheckIn.countDocuments({ eventId: eventObjId, sessionId: sess._id, status: 'CHECKED_IN' });
+        const [count, sessionAttendees, invitedCount] = await Promise.all([
+          CheckIn.countDocuments({ eventId: eventObjId, sessionId: sess._id }),
+          CheckIn.distinct('inviteeId', { eventId: eventObjId, sessionId: sess._id }),
+          // Invitees with no explicit session rules may attend every session
+          Invitee.countDocuments({
+            eventId: eventObjId,
+            $or: [
+              { sessionAccess: { $size: 0 } },
+              { sessionAccess: { $elemMatch: { sessionId: sess._id, allowed: true } } }
+            ]
+          })
+        ]);
+        // Staff with no session restriction cover every session
+        const systemUsers = assignments.filter((a: any) =>
+          !a.sessionIds || a.sessionIds.length === 0 || a.sessionIds.some((id: any) => id.toString() === (sess._id as any).toString())
+        ).length;
         return {
           sessionId: sess._id,
           name: sess.name,
           checkInCount: count,
+          attendeeCount: sessionAttendees.length,
+          invitedCount,
+          systemUsers,
+          accessControl: sess.accessControl,
           schedule: sess.schedule
         };
       })
     );
 
-    const attendanceRate = totalInvitees > 0 ? ((totalCheckIns / totalInvitees) * 100).toFixed(2) + '%' : '0.00%';
+    const attendanceRate = totalInvitees > 0 ? ((uniqueAttendees / totalInvitees) * 100).toFixed(2) + '%' : '0.00%';
 
     return {
       event: {
@@ -123,6 +151,9 @@ export const reportService = {
       attendanceRate,
       totalInvitees,
       totalCheckIns,
+      uniqueAttendees,
+      totalSessions: sessions.length,
+      totalSystemUsers,
       rsvpSummary,
       deliverySummary,
       checkInMethods,

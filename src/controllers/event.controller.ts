@@ -26,12 +26,18 @@ export const eventController = {
       const organizerId = (req as any).user.userId;
       const page = parseInt(req.query.page as string) || 1;
       const limit = parseInt(req.query.limit as string) || 10;
+      const requestedOrganizer = req.query.organizerId as string | undefined;
+      if (requestedOrganizer && !/^[0-9a-fA-F]{24}$/.test(requestedOrganizer)) {
+        res.status(400).json({ success: false, message: 'Invalid organizerId format' });
+        return;
+      }
       const filter = {
         status: req.query.status as EventStatus,
-        categoryId: req.query.categoryId as string
+        categoryId: req.query.categoryId as string,
+        organizerId: requestedOrganizer
       };
 
-      const result = await eventService.getEventsByOrganizer(organizerId, filter, { page, limit });
+      const result = await eventService.getEventsByOrganizer(organizerId, filter, { page, limit }, (req as any).user.role);
       
       res.status(200).json({
         success: true,
@@ -52,7 +58,7 @@ export const eventController = {
       const organizerId = (req as any).user.userId;
       const eventId = req.params.eventId as string;
       
-      const event = await eventService.getEventById(eventId, organizerId);
+      const event = await eventService.getEventById(eventId, organizerId, (req as any).user.role);
       
       res.status(200).json({ success: true, data: event });
     } catch (error) {
@@ -75,6 +81,8 @@ export const eventController = {
     } catch (error) {
        if ((error as Error).message === 'EVENT_NOT_FOUND') {
         res.status(404).json({ error: 'Not Found', message: 'Event not found or inaccessible', details: [] });
+      } else if ((error as Error).message === 'CATEGORY_NOT_FOUND' || (error as Error).message === 'TEMPLATE_NOT_FOUND') {
+        res.status(400).json({ success: false, error: 'Bad Request', message: (error as Error).message === 'CATEGORY_NOT_FOUND' ? 'Selected category does not exist' : 'Selected template does not exist', details: [] });
       } else {
         next(error);
       }

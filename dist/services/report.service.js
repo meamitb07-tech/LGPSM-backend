@@ -9,6 +9,7 @@ const Event_1 = require("../models/Event");
 const Invitee_1 = require("../models/Invitee");
 const CheckIn_1 = require("../models/CheckIn");
 const Session_1 = require("../models/Session");
+const SystemUserAssignment_1 = require("../models/SystemUserAssignment");
 exports.reportService = {
     async getDashboardStats(user) {
         const isOrganizer = user.role !== 'ADMIN';
@@ -18,7 +19,7 @@ exports.reportService = {
         const events = await Event_1.Event.find(eventQuery, '_id');
         const eventIds = events.map(e => e._id);
         const totalInvitees = await Invitee_1.Invitee.countDocuments({ eventId: { $in: eventIds } });
-        const totalCheckIns = await CheckIn_1.CheckIn.countDocuments({ eventId: { $in: eventIds }, status: 'CHECKED_IN' });
+        const totalCheckIns = await CheckIn_1.CheckIn.countDocuments({ eventId: { $in: eventIds } });
         const rsvpStats = await Invitee_1.Invitee.aggregate([
             { $match: { eventId: { $in: eventIds } } },
             { $group: { _id: '$rsvpStatus', count: { $sum: 1 } } }
@@ -51,7 +52,7 @@ exports.reportService = {
             throw new Error('EVENT_NOT_FOUND');
         const eventObjId = new mongoose_1.default.Types.ObjectId(eventId);
         const totalInvitees = await Invitee_1.Invitee.countDocuments({ eventId: eventObjId });
-        const totalCheckIns = await CheckIn_1.CheckIn.countDocuments({ eventId: eventObjId, status: 'CHECKED_IN' });
+        const totalCheckIns = await CheckIn_1.CheckIn.countDocuments({ eventId: eventObjId });
         // RSVP breakdown
         const rsvpStats = await Invitee_1.Invitee.aggregate([
             { $match: { eventId: eventObjId } },
@@ -76,8 +77,8 @@ exports.reportService = {
         });
         // Check-in Method breakdown (QR vs MANUAL)
         const methodStats = await CheckIn_1.CheckIn.aggregate([
-            { $match: { eventId: eventObjId, status: 'CHECKED_IN' } },
-            { $group: { _id: '$method', count: { $sum: 1 } } }
+            { $match: { eventId: eventObjId } },
+            { $group: { _id: '$checkInMethod', count: { $sum: 1 } } }
         ]);
         const checkInMethods = { QR: 0, MANUAL: 0 };
         methodStats.forEach((stat) => {
@@ -85,18 +86,41 @@ exports.reportService = {
                 checkInMethods[stat._id] = stat.count;
             }
         });
+        // Distinct attendees (an invitee checked into several sessions counts once)
+        const attendeeIds = await CheckIn_1.CheckIn.distinct('inviteeId', { eventId: eventObjId });
+        const uniqueAttendees = attendeeIds.length;
+        // System users assigned to this event
+        const assignments = await SystemUserAssignment_1.SystemUserAssignment.find({ eventId: eventObjId }, 'sessionIds').lean();
+        const totalSystemUsers = assignments.length;
         // Sessions breakdown
-        const sessions = await Session_1.Session.find({ eventId: eventObjId });
+        const sessions = await Session_1.Session.find({ eventId: eventObjId }).sort({ 'schedule.start': 1 });
         const sessionReports = await Promise.all(sessions.map(async (sess) => {
-            const count = await CheckIn_1.CheckIn.countDocuments({ eventId: eventObjId, sessionId: sess._id, status: 'CHECKED_IN' });
+            const [count, sessionAttendees, invitedCount] = await Promise.all([
+                CheckIn_1.CheckIn.countDocuments({ eventId: eventObjId, sessionId: sess._id }),
+                CheckIn_1.CheckIn.distinct('inviteeId', { eventId: eventObjId, sessionId: sess._id }),
+                // Invitees with no explicit session rules may attend every session
+                Invitee_1.Invitee.countDocuments({
+                    eventId: eventObjId,
+                    $or: [
+                        { sessionAccess: { $size: 0 } },
+                        { sessionAccess: { $elemMatch: { sessionId: sess._id, allowed: true } } }
+                    ]
+                })
+            ]);
+            // Staff with no session restriction cover every session
+            const systemUsers = assignments.filter((a) => !a.sessionIds || a.sessionIds.length === 0 || a.sessionIds.some((id) => id.toString() === sess._id.toString())).length;
             return {
                 sessionId: sess._id,
                 name: sess.name,
                 checkInCount: count,
+                attendeeCount: sessionAttendees.length,
+                invitedCount,
+                systemUsers,
+                accessControl: sess.accessControl,
                 schedule: sess.schedule
             };
         }));
-        const attendanceRate = totalInvitees > 0 ? ((totalCheckIns / totalInvitees) * 100).toFixed(2) + '%' : '0.00%';
+        const attendanceRate = totalInvitees > 0 ? ((uniqueAttendees / totalInvitees) * 100).toFixed(2) + '%' : '0.00%';
         return {
             event: {
                 id: event._id,
@@ -107,6 +131,9 @@ exports.reportService = {
             attendanceRate,
             totalInvitees,
             totalCheckIns,
+            uniqueAttendees,
+            totalSessions: sessions.length,
+            totalSystemUsers,
             rsvpSummary,
             deliverySummary,
             checkInMethods,

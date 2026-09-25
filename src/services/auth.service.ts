@@ -2,7 +2,8 @@ import { OAuth2Client } from 'google-auth-library';
 import { userRepository } from '../repositories/user.repository';
 import { tokenRepository } from '../repositories/token.repository';
 import { hashPassword, verifyPassword } from '../utils/password';
-import { generateAccessToken, generateRefreshToken, verifyRefreshToken, verifyAccessToken } from '../utils/token';
+import { generateAccessToken, generateRefreshToken, verifyRefreshToken, generatePasswordResetToken, verifyPasswordResetToken } from '../utils/token';
+import { sendEmail } from '../utils/email.provider';
 import { AuthProvider, Role } from '../models/User';
 import { env } from '../config/env';
 
@@ -16,16 +17,11 @@ export const authService = {
     }
 
     const hashedPassword = await hashPassword(data.password);
-    
-    // Determine assigned role from input or fallback checks
+
+    // Role comes only from the explicit (validated) input; never inferred from name/email
     let assignedRole = Role.ORGANIZER;
     if (data.role && Object.values(Role).includes(data.role as Role)) {
       assignedRole = data.role as Role;
-    } else if (
-      (data.email && data.email.toLowerCase().includes('admin')) ||
-      (data.fullName && data.fullName.toLowerCase().includes('admin'))
-    ) {
-      assignedRole = Role.ADMIN;
     }
 
     const user = await userRepository.create({
@@ -55,15 +51,10 @@ export const authService = {
       throw { statusCode: 401, message: 'Invalid credentials or inactive account' };
     }
 
-    // If login specifies ADMIN role or user email/fullName contains 'admin', ensure user has ADMIN role
-    if (
-      (data.role === Role.ADMIN ||
-       (user.email && user.email.toLowerCase().includes('admin')) ||
-       (user.fullName && user.fullName.toLowerCase().includes('admin'))) &&
-      user.role !== Role.ADMIN
-    ) {
-      user.role = Role.ADMIN;
-      await user.save();
+    // The login portal (Admin / Organizer / System User) must match the stored role.
+    // A login request can never change a user's role.
+    if (data.role && data.role !== user.role) {
+      throw { statusCode: 403, message: `This account is not registered as ${String(data.role).replace('_', ' ').toLowerCase()}. Please use the correct login option.` };
     }
 
     const userId = (user as any)._id.toString();
@@ -153,12 +144,27 @@ export const authService = {
     const user = await userRepository.findByEmail(email);
     if (!user) return;
 
-    const resetToken = generateAccessToken((user as any)._id.toString(), user.role); 
-    console.log(`[DEV ONLY] Password reset requested for ${email}. Token: ${resetToken}`);
+    const resetToken = generatePasswordResetToken((user as any)._id.toString(), user.role);
+    const resetUrl = `${env.FRONTEND_URL}/forgot-password?token=${encodeURIComponent(resetToken)}`;
+
+    try {
+      await sendEmail(
+        user.email,
+        'Reset your LGPSM password',
+        `<p>Hello ${user.fullName},</p><p>Use the link below to reset your password. It expires in 15 minutes.</p><p><a href="${resetUrl}">Reset password</a></p><p>If you did not request this, you can ignore this email.</p>`
+      );
+    } catch (err) {
+      // Without a working mail provider the link is only surfaced to developers
+      if (env.NODE_ENV !== 'production') {
+        console.log(`[DEV ONLY] Password reset link for ${email}: ${resetUrl}`);
+      } else {
+        console.error('Password reset email could not be sent:', (err as Error).message);
+      }
+    }
   },
 
   async resetPassword(token: string, newPassword: string) {
-    const payload = verifyAccessToken(token); 
+    const payload = verifyPasswordResetToken(token);
 
     const user = await userRepository.findById(payload.userId);
     if (!user) {

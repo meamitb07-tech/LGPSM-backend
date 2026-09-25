@@ -24,5 +24,11 @@ exports.notificationRepository = {
     },
     async markAllAsRead(userId) {
         return await Notification_1.Notification.updateMany({ userId, isRead: false }, { isRead: true });
+    },
+    async deleteById(id, userId) {
+        return await Notification_1.Notification.findOneAndDelete({ _id: id, userId });
+    },
+    async clearAll(userId) {
+        return await Notification_1.Notification.deleteMany({ userId });
     }
 };

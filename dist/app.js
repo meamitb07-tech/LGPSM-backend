@@ -71,6 +71,28 @@ app.use(express_1.default.urlencoded({ extended: true }));
 app.get('/api/health', (req, res) => {
     res.status(200).json({ status: 'ok', message: 'Backend is running securely' });
 });
+// Reject malformed ObjectId path params up-front so they surface as 400s instead of 500 CastErrors
+const OBJECT_ID_PATTERN = /^[0-9a-fA-F]{24}$/;
+const requireObjectIdParam = (param, allowedLiterals = []) => (req, res, next) => {
+    const value = req.params[param];
+    if (value && !allowedLiterals.includes(value) && !OBJECT_ID_PATTERN.test(value)) {
+        res.status(400).json({ success: false, message: `Invalid ${param} format` });
+        return;
+    }
+    next();
+};
+app.use('/api/v1/events/:eventId', requireObjectIdParam('eventId'));
+app.use('/api/v1/sessions/:sessionId', requireObjectIdParam('sessionId'));
+app.use('/api/v1/invitees/:inviteeId', requireObjectIdParam('inviteeId'));
+app.use('/api/v1/assignments/:assignmentId', requireObjectIdParam('assignmentId'));
+app.use('/api/v1/tickets/:id', requireObjectIdParam('id'));
+app.use('/api/v1/reports/events/:eventId', requireObjectIdParam('eventId'));
+app.use('/api/v1/notifications/:id', requireObjectIdParam('id', ['read-all', 'clear-all']));
+app.use('/api/v1/categories/:id', requireObjectIdParam('id'));
+app.use('/api/v1/templates/:id', requireObjectIdParam('id'));
+app.use('/api/users/:id', requireObjectIdParam('id', ['profile', 'me']));
+app.use('/api/v1/orders/:id', requireObjectIdParam('id'));
+app.use('/api/v1/invoices/:id', requireObjectIdParam('id'));
 // API Routes
 app.use('/api/auth', auth_routes_1.default);
 app.use('/api/users', user_routes_1.default);

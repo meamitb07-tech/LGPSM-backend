@@ -63,8 +63,10 @@ exports.inviteeService = {
         };
         return await invitee_repository_1.inviteeRepository.create(inviteeData);
     },
-    async getInvitees(eventId, organizerId, options = {}) {
-        const event = await Event_1.Event.findOne({ _id: eventId, organizerId });
+    async getInvitees(eventId, organizerId, options = {}, role) {
+        const event = role === 'ADMIN'
+            ? await Event_1.Event.findById(eventId)
+            : await Event_1.Event.findOne({ _id: eventId, organizerId });
         if (!event) {
             throw new Error('EVENT_NOT_FOUND');
         }

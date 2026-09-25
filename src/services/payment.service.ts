@@ -7,6 +7,33 @@ import { Event } from '../models/Event';
 import { OrderStatus } from '../models/Order';
 import { PaymentStatus } from '../models/Payment';
 
+// Payments fail closed: nothing is marked PAID unless Razorpay is configured and the signature verifies.
+function getRazorpayCredentials() {
+  const keyId = process.env.RAZORPAY_KEY_ID;
+  const keySecret = process.env.RAZORPAY_KEY_SECRET;
+  if (!keyId || !keySecret) {
+    throw new Error('PAYMENT_PROVIDER_NOT_CONFIGURED');
+  }
+  return { keyId, keySecret };
+}
+
+async function createRazorpayOrder(amountInPaise: number, currency: string, receipt: string) {
+  const { keyId, keySecret } = getRazorpayCredentials();
+  const response = await fetch('https://api.razorpay.com/v1/orders', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Basic ${Buffer.from(`${keyId}:${keySecret}`).toString('base64')}`
+    },
+    body: JSON.stringify({ amount: amountInPaise, currency, receipt })
+  });
+  const data: any = await response.json().catch(() => ({}));
+  if (!response.ok || !data?.id) {
+    throw new Error('PAYMENT_PROVIDER_ERROR');
+  }
+  return data;
+}
+
 export const paymentService = {
   async createTicketOrder(userId: string, eventId: string, ticketTierId: string, quantity: number) {
     const event = await Event.findById(eventId);
@@ -20,7 +47,13 @@ export const paymentService = {
     }
 
     const totalAmount = tier.price * quantity;
-    const providerOrderId = `order_rzp_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+    const currency = tier.currency || 'INR';
+
+    // Order must exist at the provider before we record anything locally
+    getRazorpayCredentials();
+    const receipt = `rcpt_${Date.now()}`;
+    const razorpayOrder = await createRazorpayOrder(Math.round(totalAmount * 100), currency, receipt);
+    const providerOrderId: string = razorpayOrder.id;
 
     const order = await orderRepository.create({
       userId: userId as any,
@@ -28,7 +61,7 @@ export const paymentService = {
       ticketTierId: ticketTierId as any,
       quantity,
       amount: totalAmount,
-      currency: tier.currency || 'INR',
+      currency,
       providerOrderId,
       status: OrderStatus.PENDING
     });
@@ -42,7 +75,7 @@ export const paymentService = {
       amountBase: totalAmount,
       taxAmount: 0,
       totalAmount,
-      currency: tier.currency || 'INR',
+      currency,
       status: PaymentStatus.CREATED,
       signatureVerified: false
     });
@@ -52,21 +85,22 @@ export const paymentService = {
       payment,
       razorpayOrder: {
         id: providerOrderId,
-        entity: 'order',
-        amount: totalAmount * 100, // amount in paise
-        currency: tier.currency || 'INR',
-        receipt: (order._id as any).toString()
+        entity: razorpayOrder.entity,
+        amount: razorpayOrder.amount,
+        currency: razorpayOrder.currency,
+        receipt: razorpayOrder.receipt
       }
     };
   },
 
   async verifyPayment(userId: string, providerOrderId: string, providerPaymentId: string, signature?: string) {
-    const payment = await paymentRepository.findByProviderOrderId(providerOrderId);
-    if (!payment) throw new Error('PAYMENT_NOT_FOUND');
+    const { keySecret } = getRazorpayCredentials();
 
-    let isValid = true;
-    const keySecret = process.env.RAZORPAY_KEY_SECRET;
-    if (keySecret && signature) {
+    const payment = await paymentRepository.findByProviderOrderId(providerOrderId);
+    if (!payment || payment.userId.toString() !== userId) throw new Error('PAYMENT_NOT_FOUND');
+
+    let isValid = false;
+    if (signature) {
       const generatedSignature = crypto
         .createHmac('sha256', keySecret)
         .update(`${providerOrderId}|${providerPaymentId}`)
@@ -111,7 +145,13 @@ export const paymentService = {
 
   async handleWebhook(eventBody: any, signature?: string) {
     const webhookSecret = process.env.RAZORPAY_WEBHOOK_SECRET;
-    if (webhookSecret && signature) {
+    if (!webhookSecret) {
+      throw new Error('PAYMENT_PROVIDER_NOT_CONFIGURED');
+    }
+    if (!signature) {
+      throw new Error('INVALID_WEBHOOK_SIGNATURE');
+    }
+    {
       const expectedSignature = crypto
         .createHmac('sha256', webhookSecret)
         .update(JSON.stringify(eventBody))
@@ -168,13 +208,13 @@ export const paymentService = {
 
   async getOrderById(orderId: string, userId: string) {
     const order = await orderRepository.findById(orderId);
-    if (!order) throw new Error('ORDER_NOT_FOUND');
+    if (!order || order.userId.toString() !== userId) throw new Error('ORDER_NOT_FOUND');
     return order;
   },
 
   async getInvoiceById(invoiceId: string, userId: string) {
     const invoice = await invoiceRepository.findById(invoiceId);
-    if (!invoice) throw new Error('INVOICE_NOT_FOUND');
+    if (!invoice || invoice.userId.toString() !== userId) throw new Error('INVOICE_NOT_FOUND');
     return invoice;
   }
 };

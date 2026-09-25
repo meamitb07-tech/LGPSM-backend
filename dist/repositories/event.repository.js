@@ -24,6 +24,27 @@ class EventRepository {
         ]);
         return { events, total };
     }
+    // Admin-wide listing, optionally narrowed to one organizer
+    async findAll(filter, pagination) {
+        const query = {};
+        if (filter.organizerId)
+            query.organizerId = filter.organizerId;
+        if (filter.status)
+            query.status = filter.status;
+        if (filter.categoryId)
+            query.categoryId = filter.categoryId;
+        const skip = (pagination.page - 1) * pagination.limit;
+        const [events, total] = await Promise.all([
+            Event_1.Event.find(query)
+                .populate('organizerId', 'fullName email')
+                .sort({ createdAt: -1 })
+                .skip(skip)
+                .limit(pagination.limit)
+                .exec(),
+            Event_1.Event.countDocuments(query)
+        ]);
+        return { events, total };
+    }
     async findByIdAndOrganizer(eventId, organizerId) {
         return await Event_1.Event.findOne({ _id: eventId, organizerId }).exec();
     }

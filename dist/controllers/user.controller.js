@@ -25,6 +25,17 @@ exports.userController = {
             next(error);
         }
     },
+    async changePassword(req, res, next) {
+        try {
+            if (!req.user)
+                throw { statusCode: 401, message: 'Unauthorized' };
+            const result = await user_service_1.userService.changePassword(req.user.userId, req.body.currentPassword, req.body.newPassword);
+            res.status(200).json({ success: true, data: result, message: 'Password updated successfully' });
+        }
+        catch (error) {
+            next(error);
+        }
+    },
     async createUser(req, res, next) {
         try {
             if (!req.user)
@@ -41,8 +52,30 @@ exports.userController = {
             if (!req.user)
                 throw { statusCode: 401, message: 'Unauthorized' };
             const roleFilter = req.query.role;
-            const users = await user_service_1.userService.getUsers(roleFilter);
+            const users = await user_service_1.userService.getUsers(req.user.role, roleFilter);
             res.status(200).json({ success: true, data: users });
+        }
+        catch (error) {
+            next(error);
+        }
+    },
+    async deleteUser(req, res, next) {
+        try {
+            if (!req.user)
+                throw { statusCode: 401, message: 'Unauthorized' };
+            const result = await user_service_1.userService.deleteUser(req.user.role, req.params.id);
+            res.status(200).json({ success: true, data: result });
+        }
+        catch (error) {
+            next(error);
+        }
+    },
+    async updateUser(req, res, next) {
+        try {
+            if (!req.user)
+                throw { statusCode: 401, message: 'Unauthorized' };
+            const user = await user_service_1.userService.updateUser(req.user.role, req.params.id, req.body);
+            res.status(200).json({ success: true, data: user });
         }
         catch (error) {
             next(error);

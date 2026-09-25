@@ -41,6 +41,31 @@ export class EventRepository {
     return { events, total };
   }
 
+  // Admin-wide listing, optionally narrowed to one organizer
+  async findAll(
+    filter: EventFilter & { organizerId?: string },
+    pagination: Pagination
+  ): Promise<{ events: IEvent[]; total: number }> {
+    const query: any = {};
+    if (filter.organizerId) query.organizerId = filter.organizerId;
+    if (filter.status) query.status = filter.status;
+    if (filter.categoryId) query.categoryId = filter.categoryId;
+
+    const skip = (pagination.page - 1) * pagination.limit;
+
+    const [events, total] = await Promise.all([
+      Event.find(query)
+        .populate('organizerId', 'fullName email')
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(pagination.limit)
+        .exec(),
+      Event.countDocuments(query)
+    ]);
+
+    return { events, total };
+  }
+
   async findByIdAndOrganizer(eventId: string, organizerId: string | mongoose.Types.ObjectId): Promise<IEvent | null> {
     return await Event.findOne({ _id: eventId, organizerId }).exec();
   }

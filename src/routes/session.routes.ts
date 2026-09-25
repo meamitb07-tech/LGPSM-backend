@@ -8,10 +8,11 @@ import { ZodSchema } from 'zod';
 
 const validate = (schema: ZodSchema) => (req: Request, res: Response, next: NextFunction) => {
   try {
-    schema.parse({ body: req.body });
+    const parsed: any = schema.parse({ body: req.body });
+    req.body = { ...req.body, ...parsed.body };
     next();
   } catch (err: any) {
-    res.status(400).json({ error: 'Validation Error', message: 'Invalid input data', details: err.errors });
+    res.status(400).json({ success: false, error: 'Validation Error', message: err.issues?.[0]?.message || 'Invalid input data', details: err.issues ?? err.errors });
   }
 };
 
@@ -19,7 +20,8 @@ export const eventSessionRoutes = Router({ mergeParams: true });
 eventSessionRoutes.use(authenticate);
 
 eventSessionRoutes.post('/', authorizeRoles(Role.ADMIN, Role.ORGANIZER), validate(createSessionSchema), sessionController.createSession);
-eventSessionRoutes.get('/', authorizeRoles(Role.ADMIN, Role.ORGANIZER), sessionController.getSessions);
+// SYSTEM_USER may read the sessions of events they are assigned to (for check-in)
+eventSessionRoutes.get('/', authorizeRoles(Role.ADMIN, Role.ORGANIZER, Role.SYSTEM_USER), sessionController.getSessions);
 
 export const sessionRoutes = Router();
 sessionRoutes.use(authenticate);

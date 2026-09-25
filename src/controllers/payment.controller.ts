@@ -13,6 +13,8 @@ export const paymentController = {
       if (error.message === 'EVENT_NOT_FOUND') return res.status(404).json({ error: 'Not Found', message: 'Event not found' });
       if (error.message === 'TICKET_TIER_NOT_FOUND') return res.status(404).json({ error: 'Not Found', message: 'Ticket tier not found' });
       if (error.message === 'TIER_CAPACITY_EXCEEDED') return res.status(400).json({ error: 'Bad Request', message: 'Ticket tier capacity exceeded' });
+      if (error.message === 'PAYMENT_PROVIDER_NOT_CONFIGURED') return res.status(503).json({ success: false, error: 'Service Unavailable', message: 'Online payments are not configured on this server' });
+      if (error.message === 'PAYMENT_PROVIDER_ERROR') return res.status(502).json({ success: false, error: 'Bad Gateway', message: 'Payment provider could not create the order' });
       return res.status(500).json({ error: 'Internal Server Error', message: error.message });
     }
   },
@@ -27,6 +29,8 @@ export const paymentController = {
     } catch (error: any) {
       if (error.message === 'PAYMENT_NOT_FOUND') return res.status(404).json({ error: 'Not Found', message: 'Payment record not found' });
       if (error.message === 'INVALID_PAYMENT_SIGNATURE') return res.status(400).json({ error: 'Bad Request', message: 'Payment signature verification failed' });
+      if (error.message === 'PAYMENT_PROVIDER_NOT_CONFIGURED') return res.status(503).json({ success: false, error: 'Service Unavailable', message: 'Online payments are not configured on this server' });
+      if (error.message === 'PAYMENT_PROVIDER_ERROR') return res.status(502).json({ success: false, error: 'Bad Gateway', message: 'Payment provider could not create the order' });
       return res.status(500).json({ error: 'Internal Server Error', message: error.message });
     }
   },
@@ -38,6 +42,8 @@ export const paymentController = {
       return res.status(200).json(result);
     } catch (error: any) {
       if (error.message === 'INVALID_WEBHOOK_SIGNATURE') return res.status(400).json({ error: 'Bad Request', message: 'Invalid webhook signature' });
+      if (error.message === 'PAYMENT_PROVIDER_NOT_CONFIGURED') return res.status(503).json({ success: false, error: 'Service Unavailable', message: 'Online payments are not configured on this server' });
+      if (error.message === 'PAYMENT_PROVIDER_ERROR') return res.status(502).json({ success: false, error: 'Bad Gateway', message: 'Payment provider could not create the order' });
       return res.status(500).json({ error: 'Internal Server Error', message: error.message });
     }
   },
@@ -51,6 +57,8 @@ export const paymentController = {
       const result = await paymentService.getUserOrders(userId, page, limit);
       return res.status(200).json({ success: true, data: result.orders, meta: { total: result.total, page: result.page, totalPages: result.totalPages } });
     } catch (error: any) {
+      if (error.message === 'PAYMENT_PROVIDER_NOT_CONFIGURED') return res.status(503).json({ success: false, error: 'Service Unavailable', message: 'Online payments are not configured on this server' });
+      if (error.message === 'PAYMENT_PROVIDER_ERROR') return res.status(502).json({ success: false, error: 'Bad Gateway', message: 'Payment provider could not create the order' });
       return res.status(500).json({ error: 'Internal Server Error', message: error.message });
     }
   },
@@ -62,6 +70,8 @@ export const paymentController = {
       return res.status(200).json({ success: true, data: order });
     } catch (error: any) {
       if (error.message === 'ORDER_NOT_FOUND') return res.status(404).json({ error: 'Not Found', message: 'Order not found' });
+      if (error.message === 'PAYMENT_PROVIDER_NOT_CONFIGURED') return res.status(503).json({ success: false, error: 'Service Unavailable', message: 'Online payments are not configured on this server' });
+      if (error.message === 'PAYMENT_PROVIDER_ERROR') return res.status(502).json({ success: false, error: 'Bad Gateway', message: 'Payment provider could not create the order' });
       return res.status(500).json({ error: 'Internal Server Error', message: error.message });
     }
   },
@@ -73,6 +83,8 @@ export const paymentController = {
       return res.status(200).json({ success: true, data: invoice });
     } catch (error: any) {
       if (error.message === 'INVOICE_NOT_FOUND') return res.status(404).json({ error: 'Not Found', message: 'Invoice not found' });
+      if (error.message === 'PAYMENT_PROVIDER_NOT_CONFIGURED') return res.status(503).json({ success: false, error: 'Service Unavailable', message: 'Online payments are not configured on this server' });
+      if (error.message === 'PAYMENT_PROVIDER_ERROR') return res.status(502).json({ success: false, error: 'Bad Gateway', message: 'Payment provider could not create the order' });
       return res.status(500).json({ error: 'Internal Server Error', message: error.message });
     }
   }

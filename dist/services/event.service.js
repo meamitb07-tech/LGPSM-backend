@@ -63,11 +63,17 @@ class EventService {
         };
         return await event_repository_1.eventRepository.create(dataToCreate);
     }
-    async getEventsByOrganizer(organizerId, filter, pagination) {
+    async getEventsByOrganizer(organizerId, filter, pagination, role) {
+        // Admins can review every organizer's events (read-only); organizers only see their own
+        if (role === User_1.Role.ADMIN) {
+            return await event_repository_1.eventRepository.findAll(filter, pagination);
+        }
         return await event_repository_1.eventRepository.findByOrganizer(organizerId, filter, pagination);
     }
-    async getEventById(eventId, organizerId) {
-        const event = await event_repository_1.eventRepository.findByIdAndOrganizer(eventId, organizerId);
+    async getEventById(eventId, organizerId, role) {
+        const event = role === User_1.Role.ADMIN
+            ? await Event_1.Event.findById(eventId).populate('organizerId', 'fullName email')
+            : await event_repository_1.eventRepository.findByIdAndOrganizer(eventId, organizerId);
         if (!event) {
             throw new Error('EVENT_NOT_FOUND');
         }

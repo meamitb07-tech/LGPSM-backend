@@ -9,11 +9,12 @@ const User_1 = require("../models/User");
 const checkIn_validator_1 = require("../validators/checkIn.validator");
 const validate = (schema) => (req, res, next) => {
     try {
-        schema.parse({ body: req.body });
+        const parsed = schema.parse({ body: req.body });
+        req.body = { ...req.body, ...parsed.body };
         next();
     }
     catch (err) {
-        res.status(400).json({ error: 'Validation Error', message: 'Invalid input data', details: err.errors });
+        res.status(400).json({ success: false, error: 'Validation Error', message: err.issues?.[0]?.message || 'Invalid input data', details: err.issues ?? err.errors });
     }
 };
 exports.checkInRoutes = (0, express_1.Router)();

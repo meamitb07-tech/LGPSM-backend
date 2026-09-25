@@ -22,6 +22,16 @@ export const userController = {
     }
   },
 
+  async changePassword(req: Request, res: Response, next: NextFunction) {
+    try {
+      if (!req.user) throw { statusCode: 401, message: 'Unauthorized' };
+      const result = await userService.changePassword(req.user.userId, req.body.currentPassword, req.body.newPassword);
+      res.status(200).json({ success: true, data: result, message: 'Password updated successfully' });
+    } catch (error) {
+      next(error);
+    }
+  },
+
   async createUser(req: Request, res: Response, next: NextFunction) {
     try {
       if (!req.user) throw { statusCode: 401, message: 'Unauthorized' };
@@ -36,7 +46,7 @@ export const userController = {
     try {
       if (!req.user) throw { statusCode: 401, message: 'Unauthorized' };
       const roleFilter = req.query.role as string | undefined;
-      const users = await userService.getUsers(roleFilter);
+      const users = await userService.getUsers(req.user.role, roleFilter);
       res.status(200).json({ success: true, data: users });
     } catch (error) {
       next(error);
@@ -46,7 +56,7 @@ export const userController = {
   async deleteUser(req: Request, res: Response, next: NextFunction) {
     try {
       if (!req.user) throw { statusCode: 401, message: 'Unauthorized' };
-      const result = await userService.deleteUser(req.params.id);
+      const result = await userService.deleteUser(req.user.role, req.params.id as string);
       res.status(200).json({ success: true, data: result });
     } catch (error) {
       next(error);
@@ -56,7 +66,7 @@ export const userController = {
   async updateUser(req: Request, res: Response, next: NextFunction) {
     try {
       if (!req.user) throw { statusCode: 401, message: 'Unauthorized' };
-      const user = await userService.updateUser(req.params.id, req.body);
+      const user = await userService.updateUser(req.user.role, req.params.id as string, req.body);
       res.status(200).json({ success: true, data: user });
     } catch (error) {
       next(error);

@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { userController } from '../controllers/user.controller';
 import { authenticate } from '../middlewares/authenticate';
-import { updateProfileSchema, createUserSchema } from '../validators/user.validator';
+import { updateProfileSchema, createUserSchema, updateUserSchema, changePasswordSchema } from '../validators/user.validator';
 import { Request, Response, NextFunction } from 'express';
 import { authorizeRoles } from '../middlewares/authorizeRoles';
 import { Role } from '../models/User';
@@ -22,6 +22,7 @@ router.use(authenticate);
 
 router.get('/profile', userController.getProfile);
 router.patch('/profile', validate(updateProfileSchema), userController.updateProfile);
+router.patch('/me/password', validate(changePasswordSchema), userController.changePassword);
 
 // Endpoint for Admins and Organizers to list users (supports ?role=SYSTEM_USER)
 router.get(
@@ -49,6 +50,7 @@ router.delete(
 router.patch(
   '/:id',
   authorizeRoles(Role.ADMIN, Role.ORGANIZER),
+  validate(updateUserSchema),
   userController.updateUser
 );
 

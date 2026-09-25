@@ -33,7 +33,7 @@ export const sessionController = {
       const page = parseInt(req.query.page as string) || 1;
       const limit = parseInt(req.query.limit as string) || 10;
 
-      const result = await sessionService.getSessions(eventId, organizerId, { page, limit });
+      const result = await sessionService.getSessions(eventId, organizerId, { page, limit }, (req as any).user.role);
       
       res.status(200).json({
         success: true,

@@ -21,10 +21,11 @@ const upload = multer({
 
 const validate = (schema: ZodSchema) => (req: Request, res: Response, next: NextFunction) => {
   try {
-    schema.parse({ body: req.body });
+    const parsed: any = schema.parse({ body: req.body });
+    req.body = { ...req.body, ...parsed.body };
     next();
   } catch (err: any) {
-    res.status(400).json({ error: 'Validation Error', message: 'Invalid input data', details: err.errors });
+    res.status(400).json({ success: false, error: 'Validation Error', message: err.issues?.[0]?.message || 'Invalid input data', details: err.issues ?? err.errors });
   }
 };
 

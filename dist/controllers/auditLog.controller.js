@@ -7,7 +7,8 @@ exports.auditLogController = {
         try {
             const filters = {
                 eventId: req.query.eventId,
-                actorId: req.query.actorId,
+                // Organizers may only review their own activity; admins can filter freely
+                actorId: req.user?.role === 'ORGANIZER' ? req.user.userId : req.query.actorId,
                 action: req.query.action,
                 page: parseInt(req.query.page) || 1,
                 limit: parseInt(req.query.limit) || 20

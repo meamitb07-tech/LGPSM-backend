@@ -6,6 +6,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.sessionService = void 0;
 const session_repository_1 = require("../repositories/session.repository");
 const Session_1 = require("../models/Session");
+const SystemUserAssignment_1 = require("../models/SystemUserAssignment");
 const Event_1 = require("../models/Event");
 const mongoose_1 = __importDefault(require("mongoose"));
 exports.sessionService = {
@@ -36,8 +37,23 @@ exports.sessionService = {
         };
         return await session_repository_1.sessionRepository.create(sessionData);
     },
-    async getSessions(eventId, organizerId, options = {}) {
-        const event = await Event_1.Event.findOne({ _id: eventId, organizerId });
+    async getSessions(eventId, organizerId, options = {}, role) {
+        if (role === 'SYSTEM_USER') {
+            // Staff only see sessions of events they are assigned to, limited to their assigned sessions
+            const assignment = await SystemUserAssignment_1.SystemUserAssignment.findOne({ userId: organizerId, eventId });
+            if (!assignment) {
+                throw new Error('EVENT_NOT_FOUND');
+            }
+            const query = { eventId };
+            if (assignment.sessionIds && assignment.sessionIds.length > 0) {
+                query._id = { $in: assignment.sessionIds };
+            }
+            const sessions = await Session_1.Session.find(query).sort({ 'schedule.start': 1 });
+            return { sessions, total: sessions.length };
+        }
+        const event = role === 'ADMIN'
+            ? await Event_1.Event.findById(eventId)
+            : await Event_1.Event.findOne({ _id: eventId, organizerId });
         if (!event) {
             throw new Error('EVENT_NOT_FOUND');
         }

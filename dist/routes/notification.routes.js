@@ -19,5 +19,7 @@ router.use(authenticate_1.authenticate);
 router.get('/', notification_controller_1.notificationController.getUserNotifications);
 router.patch('/read-all', notification_controller_1.notificationController.markAllAsRead);
 router.patch('/:id/read', notification_controller_1.notificationController.markAsRead);
+router.delete('/clear-all', notification_controller_1.notificationController.clearAllNotifications);
+router.delete('/:id', notification_controller_1.notificationController.deleteNotification);
 router.post('/', (0, authorizeRoles_1.authorizeRoles)(User_1.Role.ADMIN), validate(notification_validator_1.createNotificationSchema), notification_controller_1.notificationController.createNotification);
 exports.default = router;

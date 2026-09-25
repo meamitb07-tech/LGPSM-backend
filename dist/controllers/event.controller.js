@@ -25,11 +25,17 @@ exports.eventController = {
             const organizerId = req.user.userId;
             const page = parseInt(req.query.page) || 1;
             const limit = parseInt(req.query.limit) || 10;
+            const requestedOrganizer = req.query.organizerId;
+            if (requestedOrganizer && !/^[0-9a-fA-F]{24}$/.test(requestedOrganizer)) {
+                res.status(400).json({ success: false, message: 'Invalid organizerId format' });
+                return;
+            }
             const filter = {
                 status: req.query.status,
-                categoryId: req.query.categoryId
+                categoryId: req.query.categoryId,
+                organizerId: requestedOrganizer
             };
-            const result = await event_service_1.eventService.getEventsByOrganizer(organizerId, filter, { page, limit });
+            const result = await event_service_1.eventService.getEventsByOrganizer(organizerId, filter, { page, limit }, req.user.role);
             res.status(200).json({
                 success: true,
                 data: result.events,
@@ -48,7 +54,7 @@ exports.eventController = {
         try {
             const organizerId = req.user.userId;
             const eventId = req.params.eventId;
-            const event = await event_service_1.eventService.getEventById(eventId, organizerId);
+            const event = await event_service_1.eventService.getEventById(eventId, organizerId, req.user.role);
             res.status(200).json({ success: true, data: event });
         }
         catch (error) {
@@ -70,6 +76,9 @@ exports.eventController = {
         catch (error) {
             if (error.message === 'EVENT_NOT_FOUND') {
                 res.status(404).json({ error: 'Not Found', message: 'Event not found or inaccessible', details: [] });
+            }
+            else if (error.message === 'CATEGORY_NOT_FOUND' || error.message === 'TEMPLATE_NOT_FOUND') {
+                res.status(400).json({ success: false, error: 'Bad Request', message: error.message === 'CATEGORY_NOT_FOUND' ? 'Selected category does not exist' : 'Selected template does not exist', details: [] });
             }
             else {
                 next(error);

@@ -5,7 +5,7 @@ import { Role } from '../models/User';
 export interface TokenPayload {
   userId: string;
   role: Role;
-  type: 'access' | 'refresh';
+  type: 'access' | 'refresh' | 'reset';
 }
 
 export function generateAccessToken(userId: string, role: Role): string {
@@ -29,6 +29,20 @@ export function verifyAccessToken(token: string): TokenPayload {
 export function verifyRefreshToken(token: string): TokenPayload {
   const decoded = jwt.verify(token, env.JWT_REFRESH_SECRET) as TokenPayload;
   if (decoded.type !== 'refresh') {
+    throw new Error('Invalid token type');
+  }
+  return decoded;
+}
+
+// Single-purpose password reset token; it cannot be used as an API access token
+export function generatePasswordResetToken(userId: string, role: Role): string {
+  const payload: TokenPayload = { userId, role, type: 'reset' };
+  return jwt.sign(payload, env.JWT_SECRET, { expiresIn: '15m' });
+}
+
+export function verifyPasswordResetToken(token: string): TokenPayload {
+  const decoded = jwt.verify(token, env.JWT_SECRET) as TokenPayload;
+  if (decoded.type !== 'reset') {
     throw new Error('Invalid token type');
   }
   return decoded;

@@ -17,5 +17,11 @@ exports.notificationService = {
     },
     async markAllAsRead(userId) {
         return await notification_repository_1.notificationRepository.markAllAsRead(userId);
+    },
+    async deleteNotification(id, userId) {
+        return await notification_repository_1.notificationRepository.deleteById(id, userId);
+    },
+    async clearAllNotifications(userId) {
+        return await notification_repository_1.notificationRepository.clearAll(userId);
     }
 };

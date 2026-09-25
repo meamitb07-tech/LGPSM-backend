@@ -203,11 +203,16 @@ describe('Invitation Service', () => {
     expect(subject).toBe('Invitation: Test Event');
     expect(html).toContain('cid:invitation-qr-');
     expect(attachments).toBeDefined();
-    expect(attachments.length).toBe(1);
-    expect(attachments[0].filename).toBe('invitation-qr.png');
-    expect(attachments[0].contentType).toBe('image/png');
-    expect(attachments[0].cid).toContain('invitation-qr-');
-    expect(Buffer.isBuffer(attachments[0].content)).toBe(true);
+    // Email carries the rendered invitation card plus the scannable QR image
+    expect(attachments.length).toBe(2);
+    const qrAttachment = attachments.find((a: any) => a.filename === 'invitation-qr.png');
+    const cardAttachment = attachments.find((a: any) => a.filename === 'invitation-card.png');
+    expect(cardAttachment).toBeDefined();
+    expect(html).toContain(`cid:${cardAttachment.cid}`);
+    expect(qrAttachment).toBeDefined();
+    expect(qrAttachment.contentType).toBe('image/png');
+    expect(qrAttachment.cid).toContain('invitation-qr-');
+    expect(Buffer.isBuffer(qrAttachment.content)).toBe(true);
 
     // Verify token stored in DB matches the hashed invitation token
     const invitee = await Invitee.findById(inviteeId);
