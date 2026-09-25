@@ -38,4 +38,18 @@ router.post(
   userController.createUser
 );
 
+// Endpoint for Admins and Organizers to delete sub-users
+router.delete(
+  '/:id',
+  authorizeRoles(Role.ADMIN, Role.ORGANIZER),
+  userController.deleteUser
+);
+
+// Endpoint for Admins and Organizers to update sub-users
+router.patch(
+  '/:id',
+  authorizeRoles(Role.ADMIN, Role.ORGANIZER),
+  userController.updateUser
+);
+
 export default router;

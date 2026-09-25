@@ -18,5 +18,13 @@ export const notificationService = {
 
   async markAllAsRead(userId: string) {
     return await notificationRepository.markAllAsRead(userId);
+  },
+
+  async deleteNotification(id: string, userId: string) {
+    return await notificationRepository.deleteById(id, userId);
+  },
+
+  async clearAllNotifications(userId: string) {
+    return await notificationRepository.clearAll(userId);
   }
 };

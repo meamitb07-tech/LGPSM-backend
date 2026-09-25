@@ -37,13 +37,13 @@ export const invitationController = {
   async resendInvitations(req: Request, res: Response) {
     try {
       const eventId = req.params.eventId as string;
-      const { invitationIds } = req.body;
+      const { invitationIds, channel } = req.body;
       const user = {
         userId: (req as any).user?.userId,
         role: (req as any).user?.role
       };
 
-      const results = await invitationService.resendInvitations(eventId, user, invitationIds);
+      const results = await invitationService.resendInvitations(eventId, user, invitationIds, channel);
       return res.status(200).json({ success: true, message: 'Invitations resent successfully', results });
     } catch (error: any) {
       if (error.message === 'EVENT_NOT_FOUND') return res.status(404).json({ error: 'Not Found', message: 'Event not found or access denied' });
@@ -66,6 +66,25 @@ export const invitationController = {
       return res.status(200).json(data);
     } catch (error: any) {
       if (error.message === 'EVENT_NOT_FOUND') return res.status(404).json({ error: 'Not Found', message: 'Event not found or access denied' });
+      return res.status(500).json({ error: 'Internal Server Error', message: error.message });
+    }
+  },
+
+  async previewInvitationCard(req: Request, res: Response) {
+    try {
+      const eventId = req.params.eventId as string;
+      const inviteeId = req.query.inviteeId as string | undefined;
+      const user = {
+        userId: (req as any).user?.userId,
+        role: (req as any).user?.role
+      };
+
+      const pngBuffer = await invitationService.previewInvitationCard(eventId, user, inviteeId);
+      res.setHeader('Content-Type', 'image/png');
+      res.setHeader('Content-Disposition', 'inline; filename="invitation-card-preview.png"');
+      return res.status(200).send(pngBuffer);
+    } catch (error: any) {
+      if (error.message === 'EVENT_NOT_FOUND') return res.status(404).json({ error: 'Not Found', message: 'Event not found' });
       return res.status(500).json({ error: 'Internal Server Error', message: error.message });
     }
   }

@@ -27,5 +27,13 @@ export const notificationRepository = {
 
   async markAllAsRead(userId: string) {
     return await Notification.updateMany({ userId, isRead: false }, { isRead: true });
+  },
+
+  async deleteById(id: string, userId: string) {
+    return await Notification.findOneAndDelete({ _id: id, userId });
+  },
+
+  async clearAll(userId: string) {
+    return await Notification.deleteMany({ userId });
   }
 };

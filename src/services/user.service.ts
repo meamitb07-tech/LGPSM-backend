@@ -50,5 +50,29 @@ export const userService = {
       query.role = role;
     }
     return await userRepository.find(query);
+  },
+
+  async deleteUser(userId: string) {
+    const user = await userRepository.updateById(userId, { isActive: false });
+    if (!user) {
+      throw { statusCode: 404, message: 'User not found' };
+    }
+    return { deleted: true };
+  },
+
+  async updateUser(userId: string, data: any) {
+    const updatePayload: any = {};
+    if (data.fullName !== undefined) updatePayload.fullName = data.fullName;
+    if (data.email !== undefined) updatePayload.email = data.email;
+    if (data.phone !== undefined) updatePayload.phone = data.phone;
+    if (data.password) {
+      const { hashPassword } = await import('../utils/password');
+      updatePayload.passwordHash = await hashPassword(data.password);
+    }
+    const user = await userRepository.updateById(userId, updatePayload);
+    if (!user) {
+      throw { statusCode: 404, message: 'User not found' };
+    }
+    return user;
   }
 };

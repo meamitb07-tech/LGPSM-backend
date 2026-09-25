@@ -44,5 +44,25 @@ export const notificationController = {
     } catch (error: any) {
       return res.status(400).json({ error: 'Bad Request', message: error.message });
     }
+  },
+
+  async deleteNotification(req: Request, res: Response) {
+    try {
+      const userId = (req as any).user.userId;
+      await notificationService.deleteNotification(req.params.id as string, userId);
+      return res.status(200).json({ success: true, message: 'Notification cleared successfully' });
+    } catch (error: any) {
+      return res.status(500).json({ error: 'Internal Server Error', message: error.message });
+    }
+  },
+
+  async clearAllNotifications(req: Request, res: Response) {
+    try {
+      const userId = (req as any).user.userId;
+      await notificationService.clearAllNotifications(userId);
+      return res.status(200).json({ success: true, message: 'All notifications cleared successfully' });
+    } catch (error: any) {
+      return res.status(500).json({ error: 'Internal Server Error', message: error.message });
+    }
   }
 };

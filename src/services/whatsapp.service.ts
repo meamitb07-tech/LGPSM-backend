@@ -76,7 +76,7 @@ export const whatsappService = {
     const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID || env.WHATSAPP_PHONE_NUMBER_ID;
     const apiVersion = process.env.WHATSAPP_API_VERSION || env.WHATSAPP_API_VERSION || 'v25.0';
     const templateName = process.env.WHATSAPP_INVITATION_TEMPLATE || env.WHATSAPP_INVITATION_TEMPLATE || 'lgpsm_event_invitation';
-    const languageCode = process.env.WHATSAPP_TEMPLATE_LANGUAGE || env.WHATSAPP_TEMPLATE_LANGUAGE || 'en_US';
+    const languageCode = process.env.WHATSAPP_TEMPLATE_LANGUAGE || env.WHATSAPP_TEMPLATE_LANGUAGE || 'en';
 
     if (!accessToken) {
       throw new Error('WHATSAPP_CONFIG_MISSING: Access token not configured');

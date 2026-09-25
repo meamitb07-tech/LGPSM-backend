@@ -2,11 +2,13 @@ import mongoose from 'mongoose';
 import { Event } from '../models/Event';
 import { Invitee, InvitationStatus } from '../models/Invitee';
 import { Invitation, DeliveryChannel, InvitationDeliveryStatus } from '../models/Invitation';
+import { Session } from '../models/Session';
 import { Role } from '../models/User';
 import { generateSecureToken, hashToken } from '../utils/invitation.util';
 import { generateQRCodeDataURL } from '../utils/qr.util';
 import { sendEmail } from '../utils/email.provider';
 import { whatsappService } from './whatsapp.service';
+import { invitationCardService } from './invitationCard.service';
 import { env } from '../config/env';
 
 function buildFormalInvitationEmailHTML(params: {
@@ -18,9 +20,10 @@ function buildFormalInvitationEmailHTML(params: {
   dietaryPreference?: string;
   invitationUrl: string;
   cid: string;
+  cardCid?: string;
   isReminder?: boolean;
 }): string {
-  const { eventTitle, inviteeName, eventDate, eventTime, venue, dietaryPreference, invitationUrl, cid, isReminder } = params;
+  const { eventTitle, inviteeName, eventDate, eventTime, venue, dietaryPreference, invitationUrl, cid, cardCid, isReminder } = params;
   
   return `
     <!DOCTYPE html>
@@ -33,10 +36,10 @@ function buildFormalInvitationEmailHTML(params: {
       <table border="0" cellpadding="0" cellspacing="0" width="100%" style="table-layout: fixed; background-color: #F4F5F8; padding: 30px 0;">
         <tr>
           <td align="center">
-            <table border="0" cellpadding="0" cellspacing="0" width="100%" style="max-width: 600px; background-color: #FFFFFF; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08); border: 1px solid #E5E7EB;">
+            <table border="0" cellpadding="0" cellspacing="0" width="100%" style="max-width: 650px; background-color: #FFFFFF; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08); border: 1px solid #E5E7EB;">
               <!-- Header Bar -->
               <tr>
-                <td style="background: linear-gradient(135deg, #FF5B22 0%, #E04B16 100%); padding: 32px 30px; text-align: center;">
+                <td style="background: linear-gradient(135deg, #FF5B22 0%, #CF5317 100%); padding: 24px 30px; text-align: center;">
                   <h1 style="color: #FFFFFF; margin: 0; font-size: 22px; font-weight: 700; letter-spacing: -0.5px; line-height: 1.3;">
                     ${isReminder ? 'INVITATION REMINDER' : 'OFFICIAL INVITATION'}
                   </h1>
@@ -46,9 +49,18 @@ function buildFormalInvitationEmailHTML(params: {
                 </td>
               </tr>
 
+              ${cardCid ? `
+              <!-- PERSONALIZED INVITATION CARD EMBED -->
+              <tr>
+                <td align="center" style="padding: 20px 20px 10px 20px; background-color: #1A1919;">
+                  <img src="cid:${cardCid}" alt="Personalized Invitation Card" style="width: 100%; max-width: 600px; height: auto; border-radius: 8px; display: block; box-shadow: 0 4px 20px rgba(0,0,0,0.3);" />
+                </td>
+              </tr>
+              ` : ''}
+
               <!-- Greeting & Body -->
               <tr>
-                <td style="padding: 30px 30px 10px 30px; color: #1F2937;">
+                <td style="padding: 24px 30px 10px 30px; color: #1F2937;">
                   <p style="font-size: 15px; margin: 0 0 12px 0; color: #111827;">Dear <strong>${inviteeName}</strong>,</p>
                   <p style="font-size: 13px; line-height: 1.6; color: #4B5563; margin: 0;">
                     ${isReminder 
@@ -162,6 +174,9 @@ export const invitationService = {
     const shouldSendEmail = channel === DeliveryChannel.EMAIL || channel === DeliveryChannel.BOTH;
     const shouldSendWhatsApp = channel === DeliveryChannel.WHATSAPP || channel === DeliveryChannel.BOTH;
 
+    // Load all sessions for this event once
+    const allSessions = await Session.find({ eventId }).sort({ 'schedule.start': 1 }).lean();
+
     for (const invitee of invitees) {
       // Core Rule: Generate ONE secure token & ONE QR per event/invitee per send batch
       const rawToken = generateSecureToken();
@@ -192,25 +207,72 @@ export const invitationService = {
       let emailErrReason = '';
       let whatsappErrReason = '';
 
-      const eventDate = event.schedule?.start
-        ? new Date(event.schedule.start).toLocaleDateString('en-US', {
-            weekday: 'long',
-            year: 'numeric',
-            month: 'long',
-            day: 'numeric',
-          })
-        : 'To Be Announced';
+      const eventStartDate = event.schedule?.start ? new Date(event.schedule.start) : null;
 
-      const eventTime = event.schedule?.start
-        ? new Date(event.schedule.start).toLocaleTimeString('en-US', {
+      const eventDate = eventStartDate
+        ? eventStartDate.toLocaleDateString('en-US', {
+            year: 'numeric',
+            month: 'short',
+            day: '2-digit',
+          }).toUpperCase()
+        : '15 OCT 2026';
+
+      const dayOfWeek = eventStartDate
+        ? eventStartDate.toLocaleDateString('en-US', { weekday: 'long' }).toUpperCase()
+        : 'THURSDAY';
+
+      const eventTime = eventStartDate
+        ? eventStartDate.toLocaleTimeString('en-US', {
             hour: '2-digit',
             minute: '2-digit',
           })
-        : 'To Be Announced';
+        : '09:00 AM';
 
       const venue = event.format === 'VIRTUAL'
-        ? 'Virtual Event'
-        : (event.location?.address || 'Venue details to be announced');
+        ? 'VIRTUAL EVENT'
+        : (event.location?.address || 'RCCIIT AUDITORIUM');
+
+      const locationSub = event.format === 'VIRTUAL'
+        ? 'ONLINE'
+        : ((event.location as any)?.city || (event.location as any)?.state || 'KOLKATA, WB');
+
+      // Filter eligible sessions for this invitee
+      const assignedSessions = allSessions
+        .filter((s: any) => {
+          if (!invitee.sessionAccess || invitee.sessionAccess.length === 0) return true;
+          const access = invitee.sessionAccess.find((sa: any) => sa.sessionId.toString() === s._id.toString());
+          return access ? access.allowed !== false : false;
+        })
+        .map((s: any) => ({
+          id: s._id.toString(),
+          name: s.name,
+          startTime: s.schedule?.start ? new Date(s.schedule.start).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : '10:00 AM',
+          endTime: s.schedule?.end ? new Date(s.schedule.end).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : undefined
+        }));
+
+      // Render canonical personalized invitation card PNG
+      let cardBuffer: Buffer;
+      try {
+        cardBuffer = await invitationCardService.generateInvitationCardPNG({
+          invitee: { id: (invitee._id as any).toString(), name: invitee.name },
+          event: {
+            id: (event._id as any).toString(),
+            title: event.title,
+            date: eventDate,
+            dayOfWeek,
+            startTime: eventTime,
+            timeSub: 'ONWARDS',
+            venue,
+            locationSub
+          },
+          sessions: assignedSessions,
+          qrDataUrl,
+          invitationUrl
+        });
+      } catch (err) {
+        console.error('Failed to generate high-resolution invitation card PNG:', err);
+        cardBuffer = qrBuffer;
+      }
 
       // 1. Process EMAIL if selected
       if (shouldSendEmail) {
@@ -218,6 +280,8 @@ export const invitationService = {
           if (!invitee.email) throw new Error('MISSING_EMAIL');
 
           const cid = `invitation-qr-${invitee._id}`;
+          const cardCid = `invitation-card-${invitee._id}`;
+
           const htmlContent = buildFormalInvitationEmailHTML({
             eventTitle: event.title,
             inviteeName: invitee.name,
@@ -227,10 +291,17 @@ export const invitationService = {
             dietaryPreference: invitee.dietaryPreference,
             invitationUrl,
             cid,
+            cardCid,
             isReminder: false,
           });
 
           const attachments = [
+            {
+              filename: 'invitation-card.png',
+              content: cardBuffer,
+              cid: cardCid,
+              contentType: 'image/png'
+            },
             {
               filename: 'invitation-qr.png',
               content: qrBuffer,
@@ -256,9 +327,10 @@ export const invitationService = {
         try {
           if (!invitee.mobile) throw new Error('MISSING_MOBILE');
 
+          // Pass the high-resolution personalized invitation card PNG buffer to Meta WhatsApp API
           const { messageId } = await whatsappService.sendInvitationWhatsApp({
             recipientPhone: invitee.mobile,
-            qrBuffer,
+            qrBuffer: cardBuffer,
             inviteeName: invitee.name,
             eventTitle: event.title,
             eventDate,
@@ -309,20 +381,27 @@ export const invitationService = {
       await invitation.save();
       await invitee.save();
 
+      const cleanMobile = invitee.mobile ? whatsappService.normalizePhoneNumber(invitee.mobile) : '';
+      const waText = `Dear ${invitee.name},\n\nYou are cordially invited to ${event.title}!\n\n📅 Date: ${eventDate}\n⏰ Time: ${eventTime}\n📍 Venue: ${venue}\n\nView your official Invitation Pass & QR Code here:\n${invitationUrl}\n\nWe look forward to seeing you!`;
+      const whatsappWebUrl = cleanMobile ? `https://api.whatsapp.com/send?phone=${cleanMobile}&text=${encodeURIComponent(waText)}` : undefined;
+
       results.push({
         inviteeId: invitee._id,
+        inviteeName: invitee.name,
+        inviteeMobile: invitee.mobile,
         status: invitation.status,
         emailStatus: invitation.emailStatus,
         whatsappStatus: invitation.whatsappStatus,
         whatsappMessageId: invitation.whatsappMessageId,
-        failureReason: invitation.failureReason
+        failureReason: invitation.failureReason,
+        whatsappWebUrl,
       });
     }
 
     return results;
   },
 
-  async resendInvitations(eventId: string, userOrOrganizerId: any, invitationIds: string[]) {
+  async resendInvitations(eventId: string, userOrOrganizerId: any, invitationIds: string[], channelOverride?: string) {
     const isUserObj = typeof userOrOrganizerId === 'object' && userOrOrganizerId !== null;
     const organizerId = isUserObj ? userOrOrganizerId.userId : userOrOrganizerId;
     const userRole = isUserObj ? userOrOrganizerId.role : undefined;
@@ -334,6 +413,7 @@ export const invitationService = {
       event = await Event.findOne({ _id: eventId, organizerId });
     }
     if (!event) throw new Error('EVENT_NOT_FOUND');
+    const allSessions = await Session.find({ eventId });
 
     const idsArray = Array.isArray(invitationIds) ? invitationIds : typeof invitationIds === "string" ? [invitationIds] : [];
     const validObjectIds = idsArray
@@ -366,47 +446,101 @@ export const invitationService = {
       const base64Data = qrDataUrl.replace(/^data:image\/png;base64,/, '');
       const qrBuffer = Buffer.from(base64Data, 'base64');
 
+      const activeChannel = (channelOverride || invitation.channel) as DeliveryChannel;
+
       const resendInvitation = new Invitation({
         eventId,
         inviteeId: invitee._id,
-        channel: invitation.channel,
+        channel: activeChannel,
         status: InvitationDeliveryStatus.PENDING,
         tokenHash
       });
 
-      const shouldSendEmail = invitation.channel === DeliveryChannel.EMAIL || invitation.channel === DeliveryChannel.BOTH;
-      const shouldSendWhatsApp = invitation.channel === DeliveryChannel.WHATSAPP || invitation.channel === DeliveryChannel.BOTH;
+      const shouldSendEmail = activeChannel === DeliveryChannel.EMAIL || activeChannel === DeliveryChannel.BOTH;
+      const shouldSendWhatsApp = activeChannel === DeliveryChannel.WHATSAPP || activeChannel === DeliveryChannel.BOTH;
 
       let emailSuccess = false;
       let whatsappSuccess = false;
       let emailErrReason = '';
       let whatsappErrReason = '';
 
-      const eventDate = event.schedule?.start
-        ? new Date(event.schedule.start).toLocaleDateString('en-US', {
-            weekday: 'long',
-            year: 'numeric',
-            month: 'long',
-            day: 'numeric',
-          })
-        : 'To Be Announced';
+      const eventStartDate = event.schedule?.start ? new Date(event.schedule.start) : null;
 
-      const eventTime = event.schedule?.start
-        ? new Date(event.schedule.start).toLocaleTimeString('en-US', {
+      const eventDate = eventStartDate
+        ? eventStartDate.toLocaleDateString('en-US', {
+            year: 'numeric',
+            month: 'short',
+            day: '2-digit',
+          }).toUpperCase()
+        : '15 OCT 2026';
+
+      const dayOfWeek = eventStartDate
+        ? eventStartDate.toLocaleDateString('en-US', { weekday: 'long' }).toUpperCase()
+        : 'THURSDAY';
+
+      const eventTime = eventStartDate
+        ? eventStartDate.toLocaleTimeString('en-US', {
             hour: '2-digit',
             minute: '2-digit',
           })
-        : 'To Be Announced';
+        : '09:00 AM';
 
       const venue = event.format === 'VIRTUAL'
-        ? 'Virtual Event'
-        : (event.location?.address || 'Venue details to be announced');
+        ? 'VIRTUAL EVENT'
+        : (event.location?.address || 'RCCIIT AUDITORIUM');
+
+      const locationSub = event.format === 'VIRTUAL'
+        ? 'ONLINE'
+        : ((event.location as any)?.city || (event.location as any)?.state || 'KOLKATA, WB');
+
+      // Filter eligible sessions for this invitee
+      const inviteeSessionAccess = invitee.sessionAccess || [];
+      const assignedSessions = allSessions
+        .filter((s: any) => {
+          if (inviteeSessionAccess.length === 0) return true;
+          const access = inviteeSessionAccess.find(
+            (sa: any) => String(sa.sessionId?._id || sa.sessionId) === String(s._id)
+          );
+          return access ? access.allowed !== false : true;
+        })
+        .map((s: any) => ({
+          id: s._id.toString(),
+          name: s.name,
+          startTime: s.schedule?.start ? new Date(s.schedule.start).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : '10:00 AM',
+          endTime: s.schedule?.end ? new Date(s.schedule.end).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : undefined
+        }));
+
+      // Render canonical personalized invitation card PNG
+      let cardBuffer: Buffer;
+      try {
+        cardBuffer = await invitationCardService.generateInvitationCardPNG({
+          invitee: { id: (invitee._id as any).toString(), name: invitee.name, companyName: invitee.companyName || invitee.company || '' },
+          event: {
+            id: (event._id as any).toString(),
+            title: event.title,
+            date: eventDate,
+            dayOfWeek,
+            startTime: eventTime,
+            timeSub: 'ONWARDS',
+            venue,
+            locationSub
+          },
+          sessions: assignedSessions,
+          qrDataUrl,
+          invitationUrl
+        });
+      } catch (err) {
+        console.error('Failed to generate high-resolution invitation card PNG for resend:', err);
+        cardBuffer = qrBuffer;
+      }
 
       if (shouldSendEmail) {
         try {
           if (!invitee.email) throw new Error('MISSING_EMAIL');
 
           const cid = `invitation-qr-${invitee._id}`;
+          const cardCid = `invitation-card-${invitee._id}`;
+
           const htmlContent = buildFormalInvitationEmailHTML({
             eventTitle: event.title,
             inviteeName: invitee.name,
@@ -416,10 +550,17 @@ export const invitationService = {
             dietaryPreference: invitee.dietaryPreference,
             invitationUrl,
             cid,
+            cardCid,
             isReminder: true,
           });
 
           const attachments = [
+            {
+              filename: 'invitation-card.png',
+              content: cardBuffer,
+              cid: cardCid,
+              contentType: 'image/png'
+            },
             {
               filename: 'invitation-qr.png',
               content: qrBuffer,
@@ -446,7 +587,7 @@ export const invitationService = {
 
           const { messageId } = await whatsappService.sendInvitationWhatsApp({
             recipientPhone: invitee.mobile,
-            qrBuffer,
+            qrBuffer: cardBuffer,
             inviteeName: invitee.name,
             eventTitle: event.title,
             eventDate,
@@ -485,13 +626,21 @@ export const invitationService = {
 
       await resendInvitation.save();
       await invitee.save();
+      const cleanMobile = invitee.mobile ? whatsappService.normalizePhoneNumber(invitee.mobile) : '';
+      const waText = `Dear ${invitee.name},\n\nYou are cordially invited to ${event.title}!\n\n📅 Date: ${eventDate}\n⏰ Time: ${eventTime}\n📍 Venue: ${venue}\n\nView your official Invitation Pass & QR Code here:\n${invitationUrl}\n\nWe look forward to seeing you!`;
+      const whatsappWebUrl = cleanMobile ? `https://api.whatsapp.com/send?phone=${cleanMobile}&text=${encodeURIComponent(waText)}` : undefined;
+
       results.push({
         invitationId: resendInvitation._id,
+        inviteeId: invitee._id,
+        inviteeName: invitee.name,
+        inviteeMobile: invitee.mobile,
         status: resendInvitation.status,
         emailStatus: resendInvitation.emailStatus,
         whatsappStatus: resendInvitation.whatsappStatus,
         whatsappMessageId: resendInvitation.whatsappMessageId,
-        failureReason: resendInvitation.failureReason
+        failureReason: resendInvitation.failureReason,
+        whatsappWebUrl,
       });
     }
 
@@ -533,6 +682,86 @@ export const invitationService = {
       page,
       totalPages: Math.ceil(total / limit)
     };
+  },
+
+  async previewInvitationCard(eventId: string, userOrOrganizerId: any, inviteeId?: string): Promise<Buffer> {
+    const isUserObj = typeof userOrOrganizerId === 'object' && userOrOrganizerId !== null;
+    const organizerId = isUserObj ? userOrOrganizerId.userId : userOrOrganizerId;
+    const userRole = isUserObj ? userOrOrganizerId.role : undefined;
+
+    let event;
+    if (userRole === Role.ADMIN || userRole === 'ADMIN') {
+      event = await Event.findById(eventId);
+    } else {
+      event = await Event.findOne({ _id: eventId, organizerId });
+    }
+    if (!event) throw new Error('EVENT_NOT_FOUND');
+
+    let inviteeName = 'Subrata Saha';
+    let sessionAccessList: any[] = [];
+    let inviteeCompanyName = 'LGPSM';
+
+    if (inviteeId && mongoose.Types.ObjectId.isValid(inviteeId)) {
+      const invitee = await Invitee.findOne({ _id: inviteeId, eventId });
+      if (invitee) {
+        inviteeName = invitee.name;
+        sessionAccessList = invitee.sessionAccess || [];
+        inviteeCompanyName = invitee.companyName || '';
+      }
+    }
+
+    const allSessions = await Session.find({ eventId }).sort({ 'schedule.start': 1 }).lean();
+
+    const assignedSessions = allSessions
+      .filter((s: any) => {
+        if (!sessionAccessList || sessionAccessList.length === 0) return true;
+        const access = sessionAccessList.find((sa: any) => sa.sessionId.toString() === s._id.toString());
+        return access ? access.allowed !== false : false;
+      })
+      .map((s: any) => ({
+        id: s._id.toString(),
+        name: s.name,
+        startTime: s.schedule?.start ? new Date(s.schedule.start).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : '10:00 AM',
+        endTime: s.schedule?.end ? new Date(s.schedule.end).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : undefined
+      }));
+
+    const baseUrl = process.env.INVITATION_BASE_URL || `${env.FRONTEND_URL}/invitation`;
+    const sampleToken = generateSecureToken();
+    const invitationUrl = `${baseUrl}/${sampleToken}`;
+    const qrDataUrl = await generateQRCodeDataURL(invitationUrl);
+
+    const eventStartDate = event.schedule?.start ? new Date(event.schedule.start) : null;
+
+    const eventDate = eventStartDate
+      ? eventStartDate.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: '2-digit' }).toUpperCase()
+      : '15 OCT 2026';
+
+    const dayOfWeek = eventStartDate
+      ? eventStartDate.toLocaleDateString('en-US', { weekday: 'long' }).toUpperCase()
+      : 'THURSDAY';
+
+    const eventTime = eventStartDate
+      ? eventStartDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
+      : '09:00 AM';
+
+    const venue = event.format === 'VIRTUAL' ? 'VIRTUAL EVENT' : (event.location?.address || 'RCCIIT AUDITORIUM');
+    const locationSub = event.format === 'VIRTUAL' ? 'ONLINE' : ((event.location as any)?.city || (event.location as any)?.state || 'KOLKATA, WB');
+
+    return invitationCardService.generateInvitationCardPNG({
+      invitee: { name: inviteeName, companyName: inviteeCompanyName },
+      event: {
+        title: event.title,
+        date: eventDate,
+        dayOfWeek,
+        startTime: eventTime,
+        timeSub: 'ONWARDS',
+        venue,
+        locationSub
+      },
+      sessions: assignedSessions,
+      qrDataUrl,
+      invitationUrl
+    });
   }
 };
 

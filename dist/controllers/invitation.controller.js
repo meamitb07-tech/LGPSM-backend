@@ -40,12 +40,12 @@ exports.invitationController = {
     async resendInvitations(req, res) {
         try {
             const eventId = req.params.eventId;
-            const { invitationIds } = req.body;
+            const { invitationIds, channel } = req.body;
             const user = {
                 userId: req.user?.userId,
                 role: req.user?.role
             };
-            const results = await invitation_service_1.invitationService.resendInvitations(eventId, user, invitationIds);
+            const results = await invitation_service_1.invitationService.resendInvitations(eventId, user, invitationIds, channel);
             return res.status(200).json({ success: true, message: 'Invitations resent successfully', results });
         }
         catch (error) {
@@ -71,6 +71,25 @@ exports.invitationController = {
         catch (error) {
             if (error.message === 'EVENT_NOT_FOUND')
                 return res.status(404).json({ error: 'Not Found', message: 'Event not found or access denied' });
+            return res.status(500).json({ error: 'Internal Server Error', message: error.message });
+        }
+    },
+    async previewInvitationCard(req, res) {
+        try {
+            const eventId = req.params.eventId;
+            const inviteeId = req.query.inviteeId;
+            const user = {
+                userId: req.user?.userId,
+                role: req.user?.role
+            };
+            const pngBuffer = await invitation_service_1.invitationService.previewInvitationCard(eventId, user, inviteeId);
+            res.setHeader('Content-Type', 'image/png');
+            res.setHeader('Content-Disposition', 'inline; filename="invitation-card-preview.png"');
+            return res.status(200).send(pngBuffer);
+        }
+        catch (error) {
+            if (error.message === 'EVENT_NOT_FOUND')
+                return res.status(404).json({ error: 'Not Found', message: 'Event not found' });
             return res.status(500).json({ error: 'Internal Server Error', message: error.message });
         }
     }

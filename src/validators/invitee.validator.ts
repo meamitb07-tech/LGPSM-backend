@@ -1,13 +1,25 @@
 import { z } from 'zod';
 import { InvitationStatus, RsvpStatus } from '../models/Invitee';
 
+const mobileValidation = z.string().optional().or(z.literal('')).refine(val => {
+  if (!val || !val.trim()) return true;
+  const digits = val.replace(/\D/g, '');
+  return digits.length >= 7 && digits.length <= 15;
+}, { message: 'Mobile number must contain between 7 and 15 digits' });
+
 export const createInviteeSchema = z.object({
   body: z.object({
-    name: z.string().min(1, 'Name is required').max(100, 'Name must be 100 characters or less'),
-    email: z.string().email('Invalid email address').optional().or(z.literal('')),
-    mobile: z.string().optional().or(z.literal('')),
-    dietaryPreference: z.string().optional()
-  }).refine(data => data.email || data.mobile, {
+    name: z.string().trim().min(1, 'Name is required').max(100, 'Name must be 100 characters or less'),
+    email: z.string().trim().toLowerCase().email('Invalid email address').optional().or(z.literal('')),
+    mobile: mobileValidation,
+    companyName: z.string().optional(),
+    company: z.string().optional(),
+    dietaryPreference: z.string().optional(),
+    sessionAccess: z.array(z.object({
+      sessionId: z.string(),
+      allowed: z.boolean().optional().default(true)
+    })).optional()
+  }).refine(data => !!(data.email || data.mobile), {
     message: 'Either email or mobile must be provided',
     path: ['email']
   })
@@ -15,15 +27,17 @@ export const createInviteeSchema = z.object({
 
 export const updateInviteeSchema = z.object({
   body: z.object({
-    name: z.string().min(1).max(100).optional(),
-    email: z.string().email('Invalid email address').optional().or(z.literal('')),
-    mobile: z.string().optional().or(z.literal('')),
-    dietaryPreference: z.string().optional()
-    // Not allowing arbitrary changing of eventId or status fields in standard update
-  }).refine(data => {
-    // If both are explicitly set to empty, it's invalid. 
-    // If we only update name, we don't need to enforce this since they exist on the DB side.
-    return true; 
+    name: z.string().trim().min(1).max(100).optional(),
+    email: z.string().trim().toLowerCase().email('Invalid email address').optional().or(z.literal('')),
+    mobile: mobileValidation,
+    companyName: z.string().optional(),
+    company: z.string().optional(),
+    dietaryPreference: z.string().optional(),
+    rsvpStatus: z.enum(['PENDING', 'ACCEPTED', 'DECLINED']).optional(),
+    sessionAccess: z.array(z.object({
+      sessionId: z.string(),
+      allowed: z.boolean().optional().default(true)
+    })).optional()
   })
 });
 

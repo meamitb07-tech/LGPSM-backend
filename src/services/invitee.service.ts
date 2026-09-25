@@ -18,8 +18,12 @@ export const inviteeService = {
       throw new Error('DUPLICATE_INVITEE');
     }
 
+    const companyVal = (data as any).companyName || (data as any).company;
+
     const inviteeData = {
       ...data,
+      companyName: companyVal,
+      company: companyVal,
       eventId: new mongoose.Types.ObjectId(eventId)
     };
 
@@ -103,7 +107,6 @@ export const inviteeService = {
     delete (data as any).eventId;
     delete (data as any).createdAt;
     delete (data as any).invitationStatus; // Handled by separate workflows
-    delete (data as any).rsvpStatus;       // Handled by separate workflows
 
     const updated = await inviteeRepository.update(inviteeId, data);
     if (!updated) {
@@ -203,43 +206,76 @@ export const inviteeService = {
     
     const rowsRaw = xlsx.utils.sheet_to_json<any[]>(sheet, { header: 1 }) || [];
     
+    // Helper function to cleanse formula errors & invalid cell objects
+    const cleanCellValue = (val: any): string => {
+      if (val === null || val === undefined) return '';
+      const str = String(val).trim();
+      if (!str) return '';
+      const formulaErrors = ['#VALUE!', '#N/A', '#REF!', '#DIV/0!', '#NAME?', '#NUM!', '#NULL!', '[OBJECT OBJECT]', 'NAN', 'UNDEFINED', 'NULL'];
+      if (formulaErrors.some(err => str.toUpperCase().includes(err))) {
+        return '';
+      }
+      return str;
+    };
+
+    const isValidEmailFormat = (emailStr: string): boolean => {
+      if (!emailStr) return false;
+      return /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(emailStr);
+    };
+
+    const isValidMobileFormat = (mobileStr: string): boolean => {
+      if (!mobileStr) return false;
+      const digits = mobileStr.replace(/\D/g, '');
+      return digits.length >= 7 && digits.length <= 15;
+    };
+
     // Filter out completely blank rows
     const nonBlankRows = rowsRaw.filter(
-      r => Array.isArray(r) && r.some(cell => cell !== null && cell !== undefined && String(cell).trim() !== '')
+      r => Array.isArray(r) && r.some(cell => cleanCellValue(cell) !== '')
     );
 
     if (nonBlankRows.length === 0) {
-      return { totalRows: 0, imported: 0, rejected: 0, duplicateCount: 0, errors: [] };
+      return { totalRows: 0, imported: 0, updated: 0, rejected: 0, duplicateCount: 0, errors: [] };
     }
 
-    // Check if first row is header
-    let headerRowIdx = -1;
-    let nameColIdx = 0;
-    let emailColIdx = 1;
-    let mobileColIdx = 2;
-    let dietaryColIdx = 3;
+    // Smart header column matching
+    let nameColIdx = -1;
+    let emailColIdx = -1;
+    let mobileColIdx = -1;
+    let companyColIdx = -1;
+    let dietaryColIdx = -1;
     const sessionColMap = new Map<number, string>();
 
-    const firstRowStr = nonBlankRows[0].map((c: any) => String(c).trim().toLowerCase()).join(' ');
-    const isHeaderPresent = firstRowStr.includes('name') || firstRowStr.includes('email') || firstRowStr.includes('mobile') || firstRowStr.includes('phone');
+    const firstRowCols = nonBlankRows[0].map((c: any) => cleanCellValue(c).toLowerCase());
+    const isHeaderPresent = firstRowCols.some(
+      col => col.includes('name') || col.includes('email') || col.includes('mobile') || col.includes('phone') || col.includes('company')
+    );
 
     if (isHeaderPresent) {
-      headerRowIdx = 0;
-      const headerCols = nonBlankRows[0].map((c: any) => String(c).trim().toLowerCase());
-      
-      headerCols.forEach((colStr: string, colIdx: number) => {
-        if (colStr.includes('name')) nameColIdx = colIdx;
-        else if (colStr.includes('email')) emailColIdx = colIdx;
-        else if (colStr.includes('mobile') || colStr.includes('phone') || colStr.includes('contact')) mobileColIdx = colIdx;
-        else if (colStr.includes('diet') || colStr.includes('pref') || colStr.includes('food') || colStr.includes('meal') || colStr.includes('veg')) dietaryColIdx = colIdx;
+      firstRowCols.forEach((colStr: string, colIdx: number) => {
+        if (!colStr) return;
+        if (colStr.includes('name') && !colStr.includes('company')) nameColIdx = colIdx;
+        else if (colStr.includes('email') || colStr.includes('mail')) emailColIdx = colIdx;
+        else if (colStr.includes('mobile') || colStr.includes('phone') || colStr.includes('contact') || colStr.includes('whatsapp')) mobileColIdx = colIdx;
+        else if (colStr.includes('company') || colStr.includes('organization') || colStr.includes('org')) companyColIdx = colIdx;
+        else if (colStr.includes('diet') || colStr.includes('food') || colStr.includes('meal') || colStr.includes('veg') || colStr.includes('dietary')) dietaryColIdx = colIdx;
 
-        // Check session column match
+        // Check session column match dynamically
         for (const session of eventSessions) {
-          if (colStr === session.name.toLowerCase()) {
+          if (colStr === session.name.toLowerCase() || colStr.includes(session.name.toLowerCase())) {
             sessionColMap.set(colIdx, (session as any)._id.toString());
           }
         }
       });
+    }
+
+    // Fallbacks ONLY if no header row was detected
+    if (!isHeaderPresent) {
+      nameColIdx = 0;
+      emailColIdx = 1;
+      mobileColIdx = 2;
+      companyColIdx = 3;
+      dietaryColIdx = 4;
     }
 
     const dataRows = isHeaderPresent ? nonBlankRows.slice(1) : nonBlankRows;
@@ -247,6 +283,7 @@ export const inviteeService = {
     const results = {
       totalRows: dataRows.length,
       imported: 0,
+      updated: 0,
       rejected: 0,
       duplicateCount: 0,
       errors: [] as { row: number; error: string }[]
@@ -260,44 +297,67 @@ export const inviteeService = {
       const row = dataRows[i];
       const rowNum = i + (isHeaderPresent ? 2 : 1);
 
-      const name = String(row[nameColIdx] !== undefined && row[nameColIdx] !== null ? row[nameColIdx] : (row[0] || '')).trim();
-      const email = String(row[emailColIdx] !== undefined && row[emailColIdx] !== null ? row[emailColIdx] : (row[1] || '')).trim().toLowerCase();
-      const mobile = String(row[mobileColIdx] !== undefined && row[mobileColIdx] !== null ? row[mobileColIdx] : (row[2] || '')).trim();
-      const dietaryPreference = String(
-        row[dietaryColIdx] !== undefined && row[dietaryColIdx] !== null 
-          ? row[dietaryColIdx] 
-          : (row[3] !== undefined && row[3] !== null ? row[3] : '')
-      ).trim();
+      const rawName = nameColIdx !== -1 && row[nameColIdx] !== undefined ? cleanCellValue(row[nameColIdx]) : (!isHeaderPresent ? cleanCellValue(row[0]) : '');
+      const rawEmail = emailColIdx !== -1 && row[emailColIdx] !== undefined ? cleanCellValue(row[emailColIdx]).toLowerCase() : (!isHeaderPresent ? cleanCellValue(row[1]).toLowerCase() : '');
+      const rawMobile = mobileColIdx !== -1 && row[mobileColIdx] !== undefined ? cleanCellValue(row[mobileColIdx]) : (!isHeaderPresent ? cleanCellValue(row[2]) : '');
+      const companyVal = companyColIdx !== -1 && row[companyColIdx] !== undefined ? cleanCellValue(row[companyColIdx]) : (!isHeaderPresent ? cleanCellValue(row[3]) : '');
+      const dietaryPreference = dietaryColIdx !== -1 && row[dietaryColIdx] !== undefined ? cleanCellValue(row[dietaryColIdx]) : (!isHeaderPresent ? cleanCellValue(row[4]) : '');
 
-      if (!name) {
+      // 1. Name Validation
+      if (!rawName) {
         results.rejected++;
         results.errors.push({ row: rowNum, error: 'Name is required' });
         continue;
       }
 
+      if (rawName.length < 2 || rawName.length > 100) {
+        results.rejected++;
+        results.errors.push({ row: rowNum, error: `Invalid name '${rawName}' (must be 2-100 characters)` });
+        continue;
+      }
+
+      // 2. Email & Mobile Validation
+      let email = rawEmail;
+      let mobile = rawMobile;
+
+      if (email && !isValidEmailFormat(email)) {
+        results.rejected++;
+        results.errors.push({ row: rowNum, error: `Invalid email format '${email}'` });
+        continue;
+      }
+
+      if (mobile && !isValidMobileFormat(mobile)) {
+        results.rejected++;
+        results.errors.push({ row: rowNum, error: `Invalid mobile number format '${mobile}' (must contain 7-15 digits)` });
+        continue;
+      }
+
       if (!email && !mobile) {
         results.rejected++;
-        results.errors.push({ row: rowNum, error: 'Either Email or Mobile is required' });
+        results.errors.push({ row: rowNum, error: 'At least one valid contact method (Email or Mobile) is required' });
         continue;
       }
 
-      // Check duplicates within file
-      if ((email && emailsInImport.has(email)) || (mobile && mobilesInImport.has(mobile))) {
+      // 3. In-File Duplicate Check
+      const cleanDigits = mobile ? mobile.replace(/\D/g, '') : '';
+      const emailDupKey = email ? email : '';
+      const mobileDupKey = cleanDigits ? cleanDigits : '';
+
+      if ((emailDupKey && emailsInImport.has(emailDupKey)) || (mobileDupKey && mobilesInImport.has(mobileDupKey))) {
         results.rejected++;
         results.duplicateCount++;
-        results.errors.push({ row: rowNum, error: 'Duplicate within file' });
+        results.errors.push({ row: rowNum, error: `Duplicate invitee in file (${email || mobile})` });
         continue;
       }
 
-      if (email) emailsInImport.add(email);
-      if (mobile) mobilesInImport.add(mobile);
+      if (emailDupKey) emailsInImport.add(emailDupKey);
+      if (mobileDupKey) mobilesInImport.add(mobileDupKey);
 
-      // Process Session Access
+      // 4. Session Access Processing
       const sessionAccess: any[] = [];
-      
       if (sessionColMap.size > 0) {
         sessionColMap.forEach((sessionId, colIdx) => {
-          const val = String(row[colIdx] || '').trim().toUpperCase();
+          const val = cleanCellValue(row[colIdx]).toUpperCase();
           if (val === 'Y' || val === 'YES' || val === 'TRUE' || val === '1') {
             sessionAccess.push({ sessionId, allowed: true });
           } else if (val === 'N' || val === 'NO' || val === 'FALSE' || val === '0') {
@@ -307,32 +367,37 @@ export const inviteeService = {
           }
         });
       } else {
-        // Default access to all event sessions if no session columns specified
         eventSessions.forEach(session => {
-          sessionAccess.push({ sessionId: session._id, allowed: true });
+          sessionAccess.push({ sessionId: (session as any)._id, allowed: true });
         });
       }
 
-      // Check DB duplicates - update if exists so re-imported rows are updated & kept
+      // 5. Database Duplicate Check & Update
       const dbDuplicates = await inviteeRepository.findByEmailOrMobile(eventId, email, mobile);
       if (dbDuplicates.length > 0) {
         const existing = dbDuplicates[0];
-        await inviteeRepository.update((existing as any)._id.toString(), {
-          name: name || existing.name,
+        const updateData: any = {
+          name: rawName || existing.name,
           email: email || existing.email,
           mobile: mobile || existing.mobile,
+          companyName: companyVal || existing.companyName || (existing as any).company,
+          company: companyVal || existing.company || existing.companyName,
           dietaryPreference: dietaryPreference || existing.dietaryPreference,
           sessionAccess: sessionAccess.length > 0 ? sessionAccess : existing.sessionAccess
-        });
-        results.imported++;
+        };
+
+        await inviteeRepository.update((existing as any)._id.toString(), updateData);
+        results.updated++;
         continue;
       }
 
       validInviteesToInsert.push({
         eventId: new mongoose.Types.ObjectId(eventId),
-        name,
+        name: rawName,
         email,
         mobile,
+        companyName: companyVal,
+        company: companyVal,
         dietaryPreference,
         sessionAccess,
         invitationStatus: 'PENDING',

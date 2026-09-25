@@ -15,6 +15,7 @@ exports.sendInvitationSchema = zod_1.z.object({
 });
 exports.resendInvitationSchema = zod_1.z.object({
     body: zod_1.z.object({
-        invitationIds: zod_1.z.array(zod_1.z.string().regex(/^[0-9a-fA-F]{24}$/, 'Invalid invitation ID format')).min(1, 'At least one invitationId is required')
+        invitationIds: zod_1.z.array(zod_1.z.string().regex(/^[0-9a-fA-F]{24}$/, 'Invalid invitation ID format')).min(1, 'At least one invitationId is required'),
+        channel: zod_1.z.nativeEnum(Invitation_1.DeliveryChannel).optional()
     })
 });

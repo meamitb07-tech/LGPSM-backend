@@ -25,6 +25,8 @@ export interface IInvitee extends Document {
   invitationStatus: InvitationStatus;
   rsvpStatus: RsvpStatus;
   dietaryPreference?: string;
+  companyName?: string;
+  company?: string;
   sessionAccess: ISessionAccess[];
   qrTokenHash?: string;
   createdAt: Date;
@@ -55,6 +57,8 @@ const InviteeSchema: Schema = new Schema(
       required: true 
     },
     dietaryPreference: { type: String },
+    companyName: { type: String, trim: true },
+    company: { type: String, trim: true },
     sessionAccess: { type: [SessionAccessSchema], default: [] },
     qrTokenHash: { type: String }
   },

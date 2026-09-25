@@ -25,6 +25,9 @@ router.post('/send', authorizeRoles(Role.ORGANIZER, Role.ADMIN), validate(sendIn
 // POST /api/v1/events/:eventId/invitations/resend
 router.post('/resend', authorizeRoles(Role.ORGANIZER, Role.ADMIN), validate(resendInvitationSchema), invitationController.resendInvitations);
 
+// GET /api/v1/events/:eventId/invitations/preview
+router.get('/preview', authorizeRoles(Role.ORGANIZER, Role.ADMIN), invitationController.previewInvitationCard);
+
 // GET /api/v1/events/:eventId/invitations
 router.get('/', authorizeRoles(Role.ORGANIZER, Role.ADMIN), invitationController.getInvitations);
 

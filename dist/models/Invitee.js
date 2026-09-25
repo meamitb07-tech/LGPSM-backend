@@ -69,6 +69,8 @@ const InviteeSchema = new mongoose_1.Schema({
         required: true
     },
     dietaryPreference: { type: String },
+    companyName: { type: String, trim: true },
+    company: { type: String, trim: true },
     sessionAccess: { type: [SessionAccessSchema], default: [] },
     qrTokenHash: { type: String }
 }, {

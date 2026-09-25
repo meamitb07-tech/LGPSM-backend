@@ -2,28 +2,42 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.bulkUpdateSessionAccessSchema = exports.updateSessionAccessSchema = exports.updateInviteeSchema = exports.createInviteeSchema = void 0;
 const zod_1 = require("zod");
+const mobileValidation = zod_1.z.string().optional().or(zod_1.z.literal('')).refine(val => {
+    if (!val || !val.trim())
+        return true;
+    const digits = val.replace(/\D/g, '');
+    return digits.length >= 7 && digits.length <= 15;
+}, { message: 'Mobile number must contain between 7 and 15 digits' });
 exports.createInviteeSchema = zod_1.z.object({
     body: zod_1.z.object({
-        name: zod_1.z.string().min(1, 'Name is required').max(100, 'Name must be 100 characters or less'),
-        email: zod_1.z.string().email('Invalid email address').optional().or(zod_1.z.literal('')),
-        mobile: zod_1.z.string().optional().or(zod_1.z.literal('')),
-        dietaryPreference: zod_1.z.string().optional()
-    }).refine(data => data.email || data.mobile, {
+        name: zod_1.z.string().trim().min(1, 'Name is required').max(100, 'Name must be 100 characters or less'),
+        email: zod_1.z.string().trim().toLowerCase().email('Invalid email address').optional().or(zod_1.z.literal('')),
+        mobile: mobileValidation,
+        companyName: zod_1.z.string().optional(),
+        company: zod_1.z.string().optional(),
+        dietaryPreference: zod_1.z.string().optional(),
+        sessionAccess: zod_1.z.array(zod_1.z.object({
+            sessionId: zod_1.z.string(),
+            allowed: zod_1.z.boolean().optional().default(true)
+        })).optional()
+    }).refine(data => !!(data.email || data.mobile), {
         message: 'Either email or mobile must be provided',
         path: ['email']
     })
 });
 exports.updateInviteeSchema = zod_1.z.object({
     body: zod_1.z.object({
-        name: zod_1.z.string().min(1).max(100).optional(),
-        email: zod_1.z.string().email('Invalid email address').optional().or(zod_1.z.literal('')),
-        mobile: zod_1.z.string().optional().or(zod_1.z.literal('')),
-        dietaryPreference: zod_1.z.string().optional()
-        // Not allowing arbitrary changing of eventId or status fields in standard update
-    }).refine(data => {
-        // If both are explicitly set to empty, it's invalid. 
-        // If we only update name, we don't need to enforce this since they exist on the DB side.
-        return true;
+        name: zod_1.z.string().trim().min(1).max(100).optional(),
+        email: zod_1.z.string().trim().toLowerCase().email('Invalid email address').optional().or(zod_1.z.literal('')),
+        mobile: mobileValidation,
+        companyName: zod_1.z.string().optional(),
+        company: zod_1.z.string().optional(),
+        dietaryPreference: zod_1.z.string().optional(),
+        rsvpStatus: zod_1.z.enum(['PENDING', 'ACCEPTED', 'DECLINED']).optional(),
+        sessionAccess: zod_1.z.array(zod_1.z.object({
+            sessionId: zod_1.z.string(),
+            allowed: zod_1.z.boolean().optional().default(true)
+        })).optional()
     })
 });
 exports.updateSessionAccessSchema = zod_1.z.object({

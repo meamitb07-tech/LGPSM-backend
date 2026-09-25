@@ -14,7 +14,8 @@ export const sendInvitationSchema = z.object({
 
 export const resendInvitationSchema = z.object({
   body: z.object({
-    invitationIds: z.array(z.string().regex(/^[0-9a-fA-F]{24}$/, 'Invalid invitation ID format')).min(1, 'At least one invitationId is required')
+    invitationIds: z.array(z.string().regex(/^[0-9a-fA-F]{24}$/, 'Invalid invitation ID format')).min(1, 'At least one invitationId is required'),
+    channel: z.nativeEnum(DeliveryChannel).optional()
   })
 });
 
